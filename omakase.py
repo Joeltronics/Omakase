@@ -5,7 +5,6 @@ import argparse
 from cards import Cards
 from deck import Deck, get_deck_distribution
 from game import Game
-from simpleai import simple_ai
 
 
 def _bool_arg(val) -> bool:

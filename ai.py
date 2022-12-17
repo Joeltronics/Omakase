@@ -7,9 +7,16 @@ from cards import Cards, card_names
 from utils import *
 
 
-def random_ai(player_state: PlayerState, hand, verbose=False):
-	assert len(hand) > 0
-	return random.choice(hand)
+class AI:
+	def play_turn(self, player_state: PlayerState, hand, verbose=False):
+		raise NotImplementedError('To be implemented by the child class!')
+
+
+class RandomAI(AI):
+	@staticmethod
+	def play_turn(player_state: PlayerState, hand, verbose=False):
+		assert len(hand) > 0
+		return random.choice(hand)
 
 
 # A very simple AI that's mostly random
@@ -17,55 +24,57 @@ def random_ai(player_state: PlayerState, hand, verbose=False):
 #   Don't pick card that's straight-up worse than another (e.g. maki1 if maki3 is available)
 #   Complete a set if possible
 #   Take a squid if we have a wasabi out
-def basic_ai(player_state: PlayerState, hand, verbose=False):
-	n_cards = len(hand)
-	assert n_cards > 0
-	hand_maybes = set(hand)
+class BasicAI(AI):
+	@staticmethod
+	def play_turn(player_state: PlayerState, hand, verbose=False):
+		n_cards = len(hand)
+		assert n_cards > 0
+		hand_maybes = set(hand)
 
-	if Cards.Maki3 in hand_maybes:
-		hand_maybes.discard(Cards.Maki2)
-		hand_maybes.discard(Cards.Maki1)
-	elif Cards.Maki2 in hand_maybes:
-		hand_maybes.discard(Cards.Maki1)
+		if Cards.Maki3 in hand_maybes:
+			hand_maybes.discard(Cards.Maki2)
+			hand_maybes.discard(Cards.Maki1)
+		elif Cards.Maki2 in hand_maybes:
+			hand_maybes.discard(Cards.Maki1)
 
-	if Cards.SquidNigiri in hand_maybes:
-		hand_maybes.discard(Cards.SalmonNigiri)
-		hand_maybes.discard(Cards.EggNigiri)
-	elif Cards.SalmonNigiri in hand_maybes:
-		hand_maybes.discard(Cards.EggNigiri)
+		if Cards.SquidNigiri in hand_maybes:
+			hand_maybes.discard(Cards.SalmonNigiri)
+			hand_maybes.discard(Cards.EggNigiri)
+		elif Cards.SalmonNigiri in hand_maybes:
+			hand_maybes.discard(Cards.EggNigiri)
 
-	if Cards.Sashimi in hand_maybes:
-		n_sashimi_needed = 3 - (count_card(player_state.plate, Cards.Sashimi) % 3)
-		if n_sashimi_needed == 1:
-			# Definitely take sashimi
-			return Cards.Sashimi
-		elif n_sashimi_needed > n_cards:
-			# If it's not physically possibly to score this, don't take it
-			hand_maybes.discard(Cards.Sashimi)
+		if Cards.Sashimi in hand_maybes:
+			n_sashimi_needed = 3 - (count_card(player_state.plate, Cards.Sashimi) % 3)
+			if n_sashimi_needed == 1:
+				# Definitely take sashimi
+				return Cards.Sashimi
+			elif n_sashimi_needed > n_cards:
+				# If it's not physically possibly to score this, don't take it
+				hand_maybes.discard(Cards.Sashimi)
 
-	if player_state.get_num_unused_wasabi() > 0 and Cards.SquidNigiri in hand_maybes:
-		return Cards.SquidNigiri
+		if player_state.get_num_unused_wasabi() > 0 and Cards.SquidNigiri in hand_maybes:
+			return Cards.SquidNigiri
 
-	if Cards.Tempura in hand_maybes:
-		n_tempura_needed = 2 - (count_card(player_state.plate, Cards.Sashimi) % 2)
-		if n_tempura_needed == 1:
-			return Cards.Tempura
-		elif n_tempura_needed > n_cards:
-			# If it's not physically possibly to score this, don't take it
-			hand_maybes.discard(Cards.Tempura)
+		if Cards.Tempura in hand_maybes:
+			n_tempura_needed = 2 - (count_card(player_state.plate, Cards.Sashimi) % 2)
+			if n_tempura_needed == 1:
+				return Cards.Tempura
+			elif n_tempura_needed > n_cards:
+				# If it's not physically possibly to score this, don't take it
+				hand_maybes.discard(Cards.Tempura)
 
-	# Pick a card at random from the ones that are left
+		# Pick a card at random from the ones that are left
 
-	if len(hand_maybes) >= 1:
-		hand_maybes = list(hand_maybes)
-		if verbose:
-			print('Selecting randomly from: %s' % card_names(hand_maybes))
-		return random.choice(hand_maybes)
-	else:
-		# womp womp
-		if verbose:
-			print('No good options, selecting at random')
-		return random.choice(hand)
+		if len(hand_maybes) >= 1:
+			hand_maybes = list(hand_maybes)
+			if verbose:
+				print('Selecting randomly from: %s' % card_names(hand_maybes))
+			return random.choice(hand_maybes)
+		else:
+			# womp womp
+			if verbose:
+				print('No good options, selecting at random')
+			return random.choice(hand)
 
 
 """

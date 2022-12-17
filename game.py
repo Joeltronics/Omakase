@@ -2,13 +2,13 @@
 
 from collections.abc import Sequence
 from copy import copy
-from typing import Callable, Iterable, Sequence, Union
+from typing import Callable, Iterable, Optional, Sequence, Union
 
-from ai import random_ai, basic_ai
+from ai import AI
 from cards import card_names
 from deck import Deck, get_deck_distribution
 from player import PlayerState, pass_hands, init_other_player_states
-from simpleai import simple_ai
+from simpleai import SimpleAI
 import scoring
 
 
@@ -32,7 +32,7 @@ class Game:
 			deck_dist=None,
 			num_cards_per_player=None,
 			omniscient=False,
-			ai: Union[None, Callable, Iterable[Callable]] = None,
+			ai: Optional[Iterable[AI]] = None,
 			):
 	
 		self.num_players = num_players
@@ -50,15 +50,13 @@ class Game:
 		print('Creating player')
 		self.player_states = [PlayerState(deck_dist) for _ in range(num_players)]
 
-		print('Creating AI')
 		if ai is None:
-			self.ais = [simple_ai] * num_players
+			print('Creating default AI')
+			self.ai = [SimpleAI() for _ in range(num_players)]
 		elif isinstance(ai, Sequence):
 			if len(ai) != num_players:
 				raise ValueError('Number of AI must match number of players')
-			self.ais = copy(ai)
-		else:
-			self.ais = [ai] * num_players
+			self.ai = ai
 
 		self.omniscient = omniscient
 
@@ -102,7 +100,7 @@ class Game:
 
 	def _play_turn(self, pass_forward: bool):
 
-		for n, (player, ai) in enumerate(zip(self.player_states, self.ais)):
+		for n, (player, ai) in enumerate(zip(self.player_states, self.ai)):
 
 			verbose = (n == 0)
 
@@ -115,7 +113,7 @@ class Game:
 				print("State:")
 				print(repr(player))
 
-			card = ai(player, player.hand, verbose=verbose)
+			card = ai.play_turn(player, player.hand, verbose=verbose)
 
 			player.play_card(card)
 			print(f"Plays: {card}")
