@@ -1,6 +1,12 @@
-from cards import Cards
+#!/usr/bin/env python
+
+from copy import copy
 import random
-import copy
+from typing import List
+
+
+from cards import Cards
+
 
 # Standard deck distribution (108 cards)
 _std_deck = {
@@ -20,17 +26,17 @@ _std_deck = {
 
 
 def get_deck_distribution():
-	return copy.deepcopy(_std_deck)
+	return copy(_std_deck)
 
 
 class Deck:
-	def __init__(self, distribution):
+	def __init__(self, distribution: dict):
 		self.deck = []
 		for card in distribution.keys():
 			self.deck += [card] * distribution[card]
 		random.shuffle(self.deck)
 
-	def deal_hand(self, num_cards):
+	def deal_hand(self, num_cards: int) -> List[Cards]:
 
 		if len(self.deck) < num_cards:
 			raise OverflowError("Not enough cards in deck")
@@ -39,7 +45,7 @@ class Deck:
 		self.deck = self.deck[num_cards:]
 		return hand
 
-	def deal_hands(self, num_players, num_cards_per_player):
+	def deal_hands(self, num_players: int, num_cards_per_player: int) -> List[List[Cards]]:
 		hands = []
 		for _ in range(num_players):
 			hands.append(self.deal_hand(num_cards_per_player))

@@ -1,6 +1,9 @@
+#!/usr/bin/env python
 
 
 from enum import Enum, unique
+from typing import Any, Dict, Iterable, List
+
 
 @unique
 class Cards(Enum):
@@ -23,6 +26,9 @@ class Cards(Enum):
 	WasabiSalmonNigiri = 'Salmon Nigiri w/ Wasabi'
 	WasabiSquidNigiri = 'Squid Nigiri w/ Wasabi'
 
+	def __str__(self) -> str:
+		return self.value
+
 
 def remove_wasabi(card, throw_if_cant=True):
 	if card == Cards.WasabiSquidNigiri:
@@ -33,7 +39,7 @@ def remove_wasabi(card, throw_if_cant=True):
 		return Cards.EggNigiri
 	else:
 		if throw_if_cant:
-			raise ValueError('Cannot remove wasabi from %s' % card_name(card))
+			raise ValueError(f'Cannot remove wasabi from {card}')
 		return card
 
 
@@ -46,7 +52,7 @@ def add_wasabi(card, throw_if_cant=True):
 		return Cards.WasabiEggNigiri
 	else:
 		if throw_if_cant:
-			raise ValueError('Cannot add wasabi to %s' % card_name(card))
+			raise ValueError(f'Cannot add wasabi to {card}')
 		return card
 
 
@@ -70,38 +76,28 @@ def card_sort_order(card):
 	}[card]
 
 
-def sort_cards(cards):
+def sort_cards(cards: Iterable[Cards]) -> List[Cards]:
 	return sorted(list(cards), key=card_sort_order)
 
 
-def card_name(card):
-	return str(card.value)
-
-
-def card_names(cards, sort=False):
+def card_names(cards: Iterable[Cards], sort=False):
 
 	if not cards:
 		return "[]"
 
-	# TODO: if sorted, count uniques, e.g. display "[2 Tempura]" instead of "[Tempura, Tempura]"
+	# TODO: if sorted, count uniques - e.g. display "[2 Tempura]" instead of "[Tempura, Tempura]"
 
-	if sort:
-		display_list = sorted(list(cards), key=card_sort_order)
-	else:
-		display_list = cards
+	display_list = sorted(list(cards), key=card_sort_order) if sort else cards
 
-	return "[" + ", ".join([card_name(card) for card in display_list]) + "]"
+	return "[" + ", ".join([str(card) for card in display_list]) + "]"
 
 
-def dict_card_names(cards, sort=True):
+def dict_card_names(cards: Dict[Cards, Any], sort=True):
 
 	keys = cards.keys()
-
 	if sort:
 		keys = sort_cards(keys)
 
-	dict_list = []
-	for card in keys:
-		dict_list += ["%s: %i" % (card_name(card), cards[card])]
+	dict_list = [f"{card}: {cards[card]}" for card in keys]
 
 	return "{" + ", ".join(dict_list) + "}"

@@ -1,10 +1,13 @@
-from player import PlayerState
-from cards import *
-from utils import *
+#!/usr/bin/env python
+
 import random
 
+from player import PlayerState
+from cards import Cards, card_names
+from utils import *
 
-def random_ai(player_state, hand, verbose=False):
+
+def random_ai(player_state: PlayerState, hand, verbose=False):
 	assert len(hand) > 0
 	return random.choice(hand)
 
@@ -14,7 +17,7 @@ def random_ai(player_state, hand, verbose=False):
 #   Don't pick card that's straight-up worse than another (e.g. maki1 if maki3 is available)
 #   Complete a set if possible
 #   Take a squid if we have a wasabi out
-def basic_ai(player_state, hand, verbose=False):
+def basic_ai(player_state: PlayerState, hand, verbose=False):
 	n_cards = len(hand)
 	assert n_cards > 0
 	hand_maybes = set(hand)

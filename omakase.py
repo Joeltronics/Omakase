@@ -1,43 +1,46 @@
-import cards
-from deck import *
-from ai import *
-from simpleai import *
-import game
+#!/usr/bin/env python
 
-use_pudding = True
-use_chopsticks = False
+import argparse
 
-
-def play_short_game(num_players=4):
-	deck_dist = get_deck_distribution()
-
-	if not use_pudding:
-		deck_dist[Cards.Pudding] = 0
-
-	if not use_chopsticks:
-		deck_dist[Cards.Chopsticks] = 0
-
-	omniscient = True
-	#omniscient = False
-
-	game.play_game(num_players=num_players, num_rounds=1, deck_dist=deck_dist, num_cards_per_player=3, omniscient=omniscient)
+from cards import Cards
+from deck import Deck, get_deck_distribution
+from game import Game
+from simpleai import simple_ai
 
 
-def play_full_game(num_players=4):
-	deck_dist = get_deck_distribution()
-
-	if not use_pudding:
-		deck_dist[Cards.Pudding] = 0
-
-	if not use_chopsticks:
-		deck_dist[Cards.Chopsticks] = 0
-
-	game.play_game(num_players=num_players, deck_dist=deck_dist)
+def _bool_arg(val) -> bool:
+	return bool(int(val))
 
 
 def main():
-	play_full_game()
-	#play_short_game()
+	parser = argparse.ArgumentParser()
+	parser.add_argument('-p', '--players', default=4, type=int, help='Number of players')
+	parser.add_argument('--short', action='store_true', help='Play very short game (1 round of 3 cards)')
+	parser.add_argument('--pudding',    metavar='0/1', default=True,  type=_bool_arg, help='Use pudding')
+	parser.add_argument('--chopsticks', metavar='0/1', default=False, type=_bool_arg, help='Use chopsticks')
+	parser.add_argument('--omniscient', metavar='0/1', default=True,  type=_bool_arg, help='Omniscient mode (all players see all cards)')
+	args = parser.parse_args()
+
+	deck_dist = get_deck_distribution()
+
+	if not args.pudding:
+		deck_dist[Cards.Pudding] = 0
+
+	if not args.chopsticks:
+		deck_dist[Cards.Chopsticks] = 0
+
+	kwargs = dict(
+		num_players=args.players,
+		deck_dist=deck_dist,
+		omniscient=args.omniscient,
+	)
+
+	if args.short:
+		kwargs['num_rounds'] = 1
+		kwargs['num_cards_per_player'] = 3
+
+	game = Game(**kwargs)
+	game.play()
 
 
 if __name__ == "__main__":

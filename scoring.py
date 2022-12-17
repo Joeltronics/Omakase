@@ -1,40 +1,41 @@
-# I don't even know if this code will work with Python 2 or not, but here's a future import
-# just in case, because this would be quite broken with Python 2 division
-from __future__ import division
+#!/usr/bin/env python
+
+from collections.abc import Sequence
+from typing import List
 
 from cards import Cards
 import cards
+from player import PlayerState
 from utils import *
 
 
-def score_tempura(plate):
+def score_tempura(plate: Sequence[Cards]) -> int:
 	num_tempura = count_card(plate, Cards.Tempura)
 	return 5 * (num_tempura // 2)
 
 
-def score_sashimi(plate):
+def score_sashimi(plate: Sequence[Cards]) -> int:
 	num_sashimi = count_card(plate, Cards.Sashimi)
 	return 10 * (num_sashimi // 3)
 
 
-def count_maki(plate):
+def count_maki(plate: Sequence[Cards]) -> int:
 	num_maki = count_card(plate, Cards.Maki1)
 	num_maki += 2 * count_card(plate, Cards.Maki2)
 	num_maki += 3 * count_card(plate, Cards.Maki3)
 	return num_maki
 
 
-def score_dumplings(plate):
+def score_dumplings(plate: Sequence[Cards]) -> int:
 	
 	num_dumpling = count_card(plate, Cards.Dumpling)
 	
-	if num_dumpling > 5:
-		num_dumpling = 5
+	num_dumpling = min(num_dumpling, 5)
 	
 	return [0, 1, 3, 6, 10, 15][num_dumpling]
 
 
-def score_nigiri(plate):
+def score_nigiri(plate: Sequence[Cards]) -> int:
 
 	# Note: for this, you can *either* convert the Nigiri into WasabiNigiri (and
 	# then remove the Wasabi card from the plate), or if you just leave them all
@@ -43,11 +44,11 @@ def score_nigiri(plate):
 	num_wasabi = 0
 	score = 0
 
-	def score_with_wasabi(nigiriScore, num_wasabi):
+	def score_with_wasabi(nigiri_score, num_wasabi):
 		if (num_wasabi > 0):
-			nigiriScore *= 3
+			nigiri_score *= 3
 			num_wasabi -= 1
-		return nigiriScore, num_wasabi
+		return nigiri_score, num_wasabi
 	
 	for card in plate:
 		card_score = 0
@@ -77,7 +78,7 @@ def score_nigiri(plate):
 	return score
 
 
-def score_plate(plate):
+def score_plate(plate: Sequence[Cards]) -> int:
 	# This only scores cards that count in a plate by itself
 	# e.g. doesn't count Maki or Pudding
 	
@@ -89,7 +90,7 @@ def score_plate(plate):
 	return score
 
 
-def score_round(players, print_it=True):
+def score_round(players: Sequence[PlayerState], print_it=True):
 
 	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = count_maki_players(players)
 
@@ -114,7 +115,7 @@ def score_round(players, print_it=True):
 	print()
 
 
-def count_maki_players(players):
+def count_maki_players(players: Sequence[PlayerState]):
 
 	nums_maki = []
 	for player in players:
@@ -145,7 +146,7 @@ def count_maki_players(players):
 	return max_maki_count, points_most_maki, second_maki_count, points_second_most_maki
 
 
-def count_pudding_players(players):
+def count_pudding_players(players: Sequence[PlayerState]):
 	assert len(players) > 1
 
 	nums_pudding = []
@@ -181,7 +182,7 @@ def count_pudding_players(players):
 	return max_pudding_count, points_most_pudding, min_pudding_count, neg_points_least_pudding
 
 
-def score_puddings(players, print_it=True):
+def score_puddings(players: Sequence[PlayerState], print_it=True):
 	max_pudding_count, points_most_pudding, min_pudding_count, neg_points_least_pudding = count_pudding_players(players)
 
 	if print_it:

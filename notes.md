@@ -1,12 +1,10 @@
 
-
-"""
-Bad assumptions AI will make in first go:
+### Bad assumptions AI will make in first version
 
 1. Ignore chopsticks
 
 This will make strategy (and number of permutations) more complicated. Better
-to focus on basic strategy for now, though
+to focus on basic strategy for now
 
 2. Either ignore Pudding, or assume puddings count every round
 
@@ -28,10 +26,9 @@ screw over 1st-place player.
 
 Similarly, leaving a higher scoring Nigiri for someone else could cause them to
 take that and leave you something more important (e.g. your 5th dumpling)
-"""
 
-"""
-Other AI considerations:
+
+### Other AI considerations
 
 1. Once implementing maximizing relative score, have to prioritize.
 
@@ -39,22 +36,19 @@ For example, do you aim for highest score relative to whoever's in 2nd, or to ev
 If you're in last place, what do you prioritize? Whatever gets you the smallest margin
 to 1st, or try to get 3rd place?
 
-Best option might be "prioritize highest score relative to average of other players"
+Best option might be "prioritize highest score relative to average of other players"?
 
 2. Other players may not play perfectly
 
 This one's a little more complicated than it seems. For example, how are other players
 prioritizing relative score?
-"""
 
 
-"""
-
-Situations to test:
+### Situations to test
 
 2-player:
 
-* Hand A has 2 Sashimi, Hand B has 1 Sashimi
+#### Hand A has 2 Sashimi, Hand B has 1 Sashimi
 
 Technically it's possible to score Sashimi, but a good player could see that you
 should never (*see below) take Sashimi - as soon as you do, the next turn it's
@@ -69,28 +63,24 @@ absolute score, which would be the dumplings). This could also make a good test
 case!
 
 
-* Hand A has 3 Sashimi, hand B has none
+#### Hand A has 3 Sashimi, hand B has none
 
 Again, it's (probably) never worth it to score Sashimi, as you can always get blocked
 
 
-* Hand A has 2 Sashimi, Hand B has 2 Sashimi
+#### Hand A has 2 Sashimi, Hand B has 2 Sashimi
 
 I think it's probably worth it to play Sashimi here because the other player can't
 possibly block you, but I need to actually sit down and to the logic to confirm this 
 
 
-* Hand A has 3 Sashimi, Hand B has 1 Sashimi
+#### Hand A has 3 Sashimi, Hand B has 1 Sashimi
 
 I suspect here it's worth it to take Sashimi with one hand but not the other, but
 again, I need to actually logic this out
-"""
 
 
-
-
-"""
-Figuring out total possible number of combinations:
+### Figuring out total possible number of combinations
 
 This is just a generalization. It assumes two very incorrect things:
 1. all cards are unique (fixing assumption makes state way smaller)
@@ -111,7 +101,7 @@ Derivation of formula:
 
 3 players, 3 (unique) cards each
 
-P1: A B c
+P1: A B C
 P2: D E F
 P3: G H I
 
@@ -184,4 +174,3 @@ Combinations with fewer cards left:
 1 Gigacombination:
 if it takes 100 CPU cycles to determine a combination,
 On a 1 GHz processor it will take 100 seconds to resolve all
-"""

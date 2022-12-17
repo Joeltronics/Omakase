@@ -1,110 +1,135 @@
-import cards
-from deck import *
-from player import *
-from ai import *
-from simpleai import *
+#!/usr/bin/env python
+
+from collections.abc import Sequence
+from copy import copy
+from typing import Callable, Iterable, Sequence, Union
+
+from ai import random_ai, basic_ai
+from cards import card_names
+from deck import Deck, get_deck_distribution
+from player import PlayerState, pass_hands, init_other_player_states
+from simpleai import simple_ai
 import scoring
 
 
-def get_num_cards_per_player(num_players):
-	if num_players == 2:
-		return 10
-	elif num_players == 3:
-		return 9
-	elif num_players == 4:
-		return 8
-	elif num_players == 5:
-		return 7
-	else:
-		print("Invalid number of players: %i") % num_players
-		assert False
+def get_num_cards_per_player(num_players: int) -> int:
+	try:
+		return {
+			2: 10,
+			3: 9,
+			4: 8,
+			5: 7
+		}[num_players]
+	except KeyError:
+		raise ValueError(f'Invalid number of players: {num_players}') from None
 
 
-def play_game(num_players=4, num_rounds=3, deck_dist=None, num_cards_per_player=None, omniscient=False):
+class Game:
+	def __init__(
+			self,
+			num_players=4,
+			num_rounds=3,
+			deck_dist=None,
+			num_cards_per_player=None,
+			omniscient=False,
+			ai: Union[None, Callable, Iterable[Callable]] = None,
+			):
+	
+		self.num_players = num_players
+		self.num_rounds = num_rounds
 
-	if not num_cards_per_player:
-		num_cards_per_player = get_num_cards_per_player(num_players)
+		self.num_cards_per_player = num_cards_per_player or get_num_cards_per_player(num_players)
 
-	if not deck_dist:
-		deck_dist = get_deck_distribution()
+		if not deck_dist:
+			deck_dist = get_deck_distribution()
 
-	print('Creating & shuffling deck')
+		print('Creating & shuffling deck')
 
-	deck = Deck(deck_dist)
+		self.deck = Deck(deck_dist)
 
-	print('Creating players with simple AI')
-	player_states = [PlayerState(deck_dist) for _ in range(num_players)]
-	ais = [simple_ai for _ in range(num_players)]
+		print('Creating player')
+		self.player_states = [PlayerState(deck_dist) for _ in range(num_players)]
 
-	print("Players: " + ", ".join([player.name for player in player_states]))
-	print()
+		print('Creating AI')
+		if ai is None:
+			self.ais = [simple_ai] * num_players
+		elif isinstance(ai, Sequence):
+			if len(ai) != num_players:
+				raise ValueError('Number of AI must match number of players')
+			self.ais = copy(ai)
+		else:
+			self.ais = [ai] * num_players
 
-	print('Starting game')
-	print()
+		self.omniscient = omniscient
 
-	for round_num in range(num_rounds):
-
-		is_forward_round = (round_num % 2 == 0)
-
-		if num_rounds > 1:
-			print('==== Round %i =====' % (round_num+1))
-
-		hands = deck.deal_hands(num_players, num_cards_per_player)
-
-		print("Dealing hands:")
-		for player, hand in zip(player_states, hands):
-			player.assign_hand(hand)
-			print("\t%s: %s" % (player.name, cards.card_names(player.hand)))
+	def play(self):
+		print("Players: " + ", ".join([player.name for player in self.player_states]))
 		print()
 
-		init_other_player_states(player_states, forward=is_forward_round, omniscient=omniscient)
+		print('Starting game')
+		print()
 
-		for turn in range(num_cards_per_player):
+		for round_num in range(self.num_rounds):
+			pass_forward = (round_num % 2 == 0)
 
-			print('--- Turn %i ---' % (turn+1))
+			if self.num_rounds > 1:
+				print('==== Round %i =====' % (round_num+1))
+
+			hands = self.deck.deal_hands(self.num_players, self.num_cards_per_player)
+
+			print("Dealing hands:")
+			for player, hand in zip(self.player_states, hands):
+				player.assign_hand(hand)
+				print("\t%s: %s" % (player.name, card_names(player.hand)))
 			print()
 
-			for n, (player, ai) in enumerate(zip(player_states, ais)):
+			init_other_player_states(self.player_states, forward=pass_forward, omniscient=self.omniscient)
 
-				verbose = (n == 0)
-
-				print(player.name)
-				print("Hand: %s" % cards.card_names(player.hand))
-				pudding_str = (" (%i pudding)" % player.num_pudding) if player.num_pudding else ""
-				print("Plate: %s%s" % (cards.card_names(player.plate, sort=True), pudding_str))
-
-				if verbose:
-					print("State:")
-					print(repr(player))
-
-				card = ai(player, player.hand, verbose=verbose)
-
-				player.play_card(card)
-				print("Plays: %s" % cards.card_name(card))
+			for turn in range(self.num_cards_per_player):
+				print('--- Turn %i ---' % (turn+1))
 				print()
+				self._play_turn(pass_forward=pass_forward)
 
-			debug_update_player_state_verbose = False
+			scoring.score_round(self.player_states, print_it=True)
 
-			for n, player in enumerate(player_states):
-				verbose = debug_update_player_state_verbose and (n == 0)
-				player.update_other_player_state_before_pass(verbose=verbose)
+			print('Scores after round:')
+			for player in self.player_states:
+				print("\t%s: %i, %i pudding" % (player.name, player.total_score, player.num_pudding))
+			print()
 
-			print('Passing cards %s' % ('forward' if is_forward_round else 'backward'))
-			pass_hands(player_states, forward=is_forward_round)
-
-			for n, player in enumerate(player_states):
-				verbose = debug_update_player_state_verbose and (n == 0)
-				player.update_other_player_state_after_pass(verbose=verbose)
-
-		scoring.score_round(player_states, print_it=True)
-
-		print('Scores after round:')
-		for player in player_states:
-			print("\t%s: %i, %i pudding" % (player.name, player.total_score, player.num_pudding))
-		print()
-
-	scoring.score_puddings(player_states)
+		scoring.score_puddings(self.player_states)
 
 
-if __name__ == "__main__":
-	play_game()
+	def _play_turn(self, pass_forward: bool):
+
+		for n, (player, ai) in enumerate(zip(self.player_states, self.ais)):
+
+			verbose = (n == 0)
+
+			print(player.name)
+			print("Hand: %s" % card_names(player.hand))
+			pudding_str = (" (%i pudding)" % player.num_pudding) if player.num_pudding else ""
+			print("Plate: %s%s" % (card_names(player.plate, sort=True), pudding_str))
+
+			if verbose:
+				print("State:")
+				print(repr(player))
+
+			card = ai(player, player.hand, verbose=verbose)
+
+			player.play_card(card)
+			print(f"Plays: {card}")
+			print()
+
+		debug_update_player_state_verbose = False
+
+		for idx, player in enumerate(self.player_states):
+			verbose = debug_update_player_state_verbose and (idx == 0)
+			player.update_other_player_state_before_pass(verbose=verbose)
+
+		print('Passing cards %s' % ('forward' if pass_forward else 'backward'))
+		pass_hands(self.player_states, forward=pass_forward)
+
+		for idx, player in enumerate(self.player_states):
+			verbose = debug_update_player_state_verbose and (idx == 0)
+			player.update_other_player_state_after_pass(verbose=verbose)
