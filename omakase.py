@@ -6,6 +6,9 @@ from typing import List
 
 from tqdm import trange
 
+from ai import RandomAI, RandomPlusAI
+from simpleai import SimpleAI
+
 from cards import Cards
 from deck import Deck, get_deck_distribution
 from game import Game
@@ -42,7 +45,15 @@ def main():
 	if not args.chopsticks:
 		deck_dist[Cards.Chopsticks] = 0
 
-	player_names = [get_player_name() for _ in range(args.players)]
+	ai = [SimpleAI(), RandomPlusAI()]
+	player_names = ['SimpleAI', 'RandomPlusAI']
+
+	num_random_ai = args.players - len(ai)
+	ai.extend([RandomAI() for _ in range(num_random_ai)])
+	if num_random_ai == 1:
+		player_names.append('RandomAI')
+	else:
+		player_names.extend([f'RandomAI {1+idx}' for idx in range(num_random_ai)])
 
 	game_kwargs = dict(
 		num_players=args.players,
@@ -50,6 +61,7 @@ def main():
 		omniscient=args.omniscient,
 		player_names=player_names,
 		verbose=(args.num_games == 1),
+		ai=ai,
 	)
 
 	if args.short:
@@ -66,6 +78,7 @@ def main():
 	print(f'{args.players} Players: ' + ', '.join(player_names))
 
 	for game_idx in trange(args.num_games, desc=f'Playing {args.num_games} games'):
+		# TODO: once there are stateful AI, will need to create new ones each game
 		game = Game(**game_kwargs)
 		results = game.play()
 

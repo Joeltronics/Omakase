@@ -21,10 +21,11 @@ class RandomAI(AI):
 
 # A very simple AI that's mostly random
 # But makes a few obvious choices:
-#   Don't pick card that's straight-up worse than another (e.g. maki1 if maki3 is available)
+#   Don't pick card that's straight-up worse than another (e.g. maki1 when maki3 is available)
 #   Complete a set if possible
+#   Don't take sets that will be impossible to complete (based only on number of cards left - doesn't keep track of other hands)
 #   Take a squid if we have a wasabi out
-class BasicAI(AI):
+class RandomPlusAI(AI):
 	@staticmethod
 	def play_turn(player_state: PlayerState, hand, verbose=False):
 		n_cards = len(hand)
