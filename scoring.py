@@ -112,7 +112,8 @@ def score_round(players: Sequence[PlayerState], print_it=True):
 
 		player.end_round(score)
 
-	print()
+	if print_it:
+		print()
 
 
 def count_maki_players(players: Sequence[PlayerState]):
@@ -204,6 +205,79 @@ def score_puddings(players: Sequence[PlayerState], print_it=True):
 
 		if print_it:
 			print("\t%s: %i pudding (%i points), total score: %i" % (player.name, player.num_pudding, score, player.total_score))
+
+	if print_it:
+		print()
+
+
+def rank_players(players: Sequence[PlayerState], print_it=True) -> List[int]:
+
+	unscored_players = {idx: player for idx, player in enumerate(players)}
+	player_ranks = dict()
+
+	# curr_rank = 1
+
+	for rank in range(len(players)):
+
+		"""
+		With no ties, here's what we'll see at the start of each loop iteration:
+
+		rank=0: player_ranks={}
+		rank=1: player_ranks={<idx>: 0}
+		rank=2: player_ranks={<idx>: 0, <idx>: 1}
+		rank=3: player_ranks={<idx>: 0, <idx>: 1, <idx>: 2}
+
+		If there's a tie for 1st (rank 0), then:
+
+		rank=0: player_ranks={}
+		rank=1: player_ranks={<idx>: 0, <idx>: 0} - skip this iteration
+		rank=2: player_ranks={<idx>: 0, <idx>: 0}
+		rank=3: player_ranks={<idx>: 0, <idx>: 0, <idx>: 2}
+		"""
+		if len(player_ranks) > rank:
+			continue
+
+		assert unscored_players
+
+		max_score = max([p.total_score for p in unscored_players.values()])
+		players_at_max_score = {idx: p for idx, p in unscored_players.items() if p.total_score == max_score}
+		assert players_at_max_score
+
+		if len(players_at_max_score) == 1:
+			player_idx = next(iter(players_at_max_score))
+			unscored_players.pop(player_idx)
+			player_ranks[player_idx] = rank
+			continue
+
+		# Tiebreaker is max number of puddings
+
+		max_num_puddings_of_players_at_max_score = max([p.num_pudding for p in players_at_max_score.values()])
+		players_at_max_score_and_max_puddings = {
+			idx: p for idx, p in players_at_max_score.items()
+			if p.num_pudding == max_num_puddings_of_players_at_max_score
+		}
+
+		assert players_at_max_score_and_max_puddings
+
+		# No 2nd tiebreaker; all remaining tied players share this rank
+
+		for player_idx in players_at_max_score_and_max_puddings.keys():
+			unscored_players.pop(player_idx)
+			player_ranks[player_idx] = rank
+
+	assert not unscored_players, 'Failed to score all players'
+	assert sorted(list(player_ranks.keys())) == list(range(len(players))), 'Failed to score all players'
+
+	# Convert to list, and 1-index
+	player_ranks_list = [player_ranks[idx] + 1 for idx in range(len(players))]
+	assert min(player_ranks_list) == 1
+
+	if print_it:
+		print('Final results:')
+		for player, rank in sorted(zip(players, player_ranks_list), key=lambda p_r: p_r[1]):
+			print(f'\t{rank}: {player.name}')
+
+	return player_ranks_list
 
 
 def _test():
