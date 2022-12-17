@@ -11,6 +11,7 @@ from simpleai import SimpleAI
 
 from cards import Cards
 from deck import Deck, get_deck_distribution
+from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game
 from player import get_player_name
 
@@ -25,6 +26,7 @@ class PlayerGameStats:
 	total_num_points: int = 0
 	margin_from_winner: int = 0
 	ranks: List[int] = field(default_factory=list)
+	elo: float = DEFAULT_ELO
 
 
 def main():
@@ -87,25 +89,31 @@ def main():
 
 		winning_score = max(r.score for r in results)
 
-		for idx, result in enumerate(results):
+		new_elos = multiplayer_elo(
+			ranks=[r.rank for r in results],
+			ratings=[p.elo for p in player_game_stats],
+			num_prev_games=game_idx)
+
+		for idx, (result, new_elo) in enumerate(zip(results, new_elos)):
 			margin = result.score - winning_score
 			player_game_stats[idx].total_num_points += result.score
 			player_game_stats[idx].ranks.append(result.rank)
 			player_game_stats[idx].margin_from_winner += margin
+			player_game_stats[idx].elo = new_elo
 
 	print()
 	print(f'Results from {args.num_games} games')
 	print()
 	# TODO: dynamic table column widths, in case of long player name or player with >= 10,000 wins
-	print(f'{"Player":<16} | {"Wins":^10} | Avg rank | Avg score | Avg margin')
-	print(f'{"-"*16} | {"-"*10} | {"-"*8} | {"-"*9} | {"-"*10}')
+	print(f'{"Player":<16} | {"Wins":^10} | Avg rank | Avg score | Avg margin | Elo')
+	print(f'{"-"*16} | {"-"*10} | {"-"*8} | {"-"*9} | {"-"*10} | {"-"*4}')
 	for player in player_game_stats:
 		num_wins = sum(rank == 1 for rank in player.ranks)
 		pct_wins = num_wins / args.num_games * 100.0
 		avg_rank = sum(player.ranks) / args.num_games
 		avg_score = player.total_num_points / args.num_games
 		avg_margin = player.margin_from_winner / args.num_games
-		print(f'{player.name:<16} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f}')
+		print(f'{player.name:<16} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f} | {player.elo:>4.0f}')
 
 
 if __name__ == "__main__":
