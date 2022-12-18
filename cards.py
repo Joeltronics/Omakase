@@ -2,7 +2,7 @@
 
 
 from enum import Enum, unique
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Union, Tuple
 
 
 @unique
@@ -45,7 +45,7 @@ def sort_cards(cards: Iterable[Card]) -> List[Card]:
 	return sorted(list(cards), key=card_sort_order)
 
 
-def card_names(cards: Iterable[Card], sort=False):
+def card_names(cards: Iterable[Union[Card, Tuple[Card, Card]]], sort=False):
 
 	if not cards:
 		return "[]"

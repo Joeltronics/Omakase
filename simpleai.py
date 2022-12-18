@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 
+from collections.abc import Collection
+from typing import Tuple, Union
+
 from ai import AI
 from player import PlayerState
 from cards import Card, card_names
@@ -79,12 +82,14 @@ doesn't look at other players' hands/plates, or what other cards are still out t
 """
 class SimpleAI(AI):
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand, verbose=False):
+	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
 		n_cards = len(hand)
 		assert n_cards > 0
 
 		if n_cards == 1:
 			return hand[0]
+
+		can_use_chopsticks = Card.Chopsticks in player_state.plate and len(hand) >= 2
 
 		wasabi = player_state.get_num_unused_wasabi() > 0
 

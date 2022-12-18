@@ -34,9 +34,9 @@ class PlayerGameStats:
 	elo: float = DEFAULT_ELO
 
 
-def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=False, **game_kwargs):
+def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=False, random_seed=None, **game_kwargs):
 
-	random.seed()
+	random.seed(random_seed)
 
 	inverse_player_order = None
 	if randomize_player_order:
@@ -73,14 +73,19 @@ def _play_game_from_kwargs(kwargs, /):
 
 
 def main():
+	# TODO: option for deterministic seed for repeatable games
 	parser = argparse.ArgumentParser()
 	parser.add_argument('-p', '--players', default=4, type=int, help='Number of players')
 	parser.add_argument('-n', '--num-games', default=1, type=int, help='Number of games to play')
+	parser.add_argument('--seed', type=int, help='Deterministic random seed (currently only works for single-threaded)')
 	parser.add_argument('--short', action='store_true', help='Play very short game (1 round of 3 cards)')
 	parser.add_argument('--pudding',    metavar='0/1', default=True,  type=_bool_arg, help='Use pudding')
-	parser.add_argument('--chopsticks', metavar='0/1', default=False, type=_bool_arg, help='Use chopsticks')
+	parser.add_argument('--chopsticks', metavar='0/1', default=True, type=_bool_arg, help='Use chopsticks')
+	# TODO: make omniscient default False (unless --short)
 	parser.add_argument('--omniscient', metavar='0/1', default=True,  type=_bool_arg, help='Omniscient mode (all players see all cards)')
 	parser.add_argument('--randomize-order', metavar='0/1', default=None, type=_bool_arg, help='Randomize player order (default 1 if multiple games, 0 if not)')
+	parser.add_argument('--single-thread', action='store_true', help='Force single-threaded')
+	parser.add_argument('--pause', dest='pause_after_turn', action='store_true', help='Pause for user input after each round')
 	args = parser.parse_args()
 
 	if args.randomize_order is None:
@@ -112,6 +117,7 @@ def main():
 		ai=ai,
 		verbose=(args.num_games == 1),
 		randomize_player_order=args.randomize_order,
+		pause_after_turn=args.pause_after_turn,
 	)
 
 	if args.short:
@@ -126,7 +132,16 @@ def main():
 
 	print(f'{args.players} Players: ' + ', '.join(player_names))
 
-	use_multiprocessing = args.num_games > 10
+	use_multiprocessing = args.num_games > 10 and not args.pause_after_turn and not args.single_thread and (args.seed is None)
+
+	# TODO: support random seed with multiprocessing
+	if not use_multiprocessing:
+		if args.seed is None:
+			random.seed()
+			args.seed = random.randint(0, (2 ** 32) - 1 - args.num_games)
+			print(f'Random seed: {args.seed}')
+		else:
+			print(f'Using provided random seed: {args.seed}')
 
 	if use_multiprocessing:
 		with Pool() as p:
@@ -139,8 +154,8 @@ def main():
 			)
 	else:
 		game_results = []
-		for _ in trange(args.num_games, desc=f'Playing {args.num_games} games'):
-			game_results.append(play_game(**play_game_kwargs))
+		for game_idx in trange(args.num_games, desc=f'Playing {args.num_games} games'):
+			game_results.append(play_game(random_seed=(args.seed + game_idx), **play_game_kwargs))
 
 	for game_idx, result in enumerate(tqdm(game_results, desc='Processing results')):
 		if len(result) != args.players:

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Sequence, Union
 
 from ai import AI
-from cards import card_names
+from cards import Card, card_names
 from deck import Deck, get_deck_distribution
 from player import PlayerState, pass_hands, init_other_player_states
 from simpleai import SimpleAI
@@ -44,9 +44,11 @@ class Game:
 			player_names: Optional[Iterable[str]] = None,
 			ai: Optional[Iterable[AI]] = None,
 			verbose: bool = False,
+			pause_after_turn: bool = False,
 			):
 
 		self.verbose = verbose
+		self.pause_after_turn = pause_after_turn
 
 		self._num_players = num_players
 		self._num_rounds = num_rounds
@@ -82,6 +84,11 @@ class Game:
 		if self.verbose:
 			print(*args, **kwargs)
 
+	def _pause(self):
+		if not self.pause_after_turn:
+			return
+		input('Press enter to continue...')
+
 	def play(self) -> Iterable[PlayerResult]:
 		self._print("Players: " + ", ".join([player.name for player in self._player_states]))
 		self._print()
@@ -103,12 +110,13 @@ class Game:
 				self._print("\t%s: %s" % (player.name, card_names(player.hand)))
 			self._print()
 
-			init_other_player_states(self._player_states, forward=pass_forward, omniscient=self._omniscient)
+			init_other_player_states(self._player_states, forward=pass_forward, omniscient=self._omniscient, verbose=self.verbose)
 
 			for turn in range(self._num_cards_per_player):
 				self._print('--- Turn %i ---' % (turn+1))
 				self._print()
 				self._play_turn(pass_forward=pass_forward)
+				self._pause()
 
 			scoring.score_round(self._player_states, print_it=self.verbose)
 
@@ -116,6 +124,8 @@ class Game:
 			for player in self._player_states:
 				self._print("\t%s: %i, %i pudding" % (player.name, player.total_score, player.num_pudding))
 			self._print()
+
+			self._pause()
 
 		scoring.score_puddings(self._player_states, print_it=self.verbose)
 
@@ -145,10 +155,16 @@ class Game:
 				self._print("State:")
 				self._print(repr(player))
 
-			card = ai.play_turn(deepcopy(player), copy(player.hand), verbose=verbose)
+			card_or_pair = ai.play_turn(deepcopy(player), copy(player.hand), verbose=verbose)
 
-			player.play_card(card)
-			self._print(f"Plays: {card}")
+			if isinstance(card_or_pair, Card):
+				player.play_card(card_or_pair)
+				self._print(f"Plays: {card_or_pair}")
+			elif isinstance(card_or_pair, tuple) and len(card_or_pair) == 2:
+				player.play_chopsticks(*card_or_pair)
+				self._print(f"Plays chopsticks: {card_or_pair[0]} + {card_or_pair[1]}")
+			else:
+				raise ValueError(f'AI played invalid: {card_or_pair!r}')
 			self._print()
 
 		debug_update_player_state_verbose = False

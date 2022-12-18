@@ -13,10 +13,10 @@ _num_players = 0
 
 # Want all names to be same length just for neater formatting
 
-_player_names = ["Geoff", "Steve", "Tracy", "Johan", "James", "Paula", "Jenni", "Julia", "Nancy", "Bobby"]
+_player_names = ["Geoff", "Steve", "Tracy", "Johan", "James", "Paula", "Jenny", "Julia", "Nancy", "Bobby"]
 #_player_names = ["Eddard", "Tyrion", "Cersei", "Robert", "Tommen", "Walder", "Rickon", "Olenna", "Chewie"]
 #_player_names = ["Jaime", "Sansa", "Roose", "Walda", "Davos", "Hodor", "Varys", "Petyr", "Loras", "Renly", "Tyene"]
-#_player_names = ["Arya", "Bran", "Robb", "Dany", "Lady", "Luke", "Mara", "R2D2", "C3PO", "Kylo"]
+#_player_names = ["Arya", "Bran", "Robb", "Dany", "Lady", "Luke", "Leia", "Mara", "R2D2", "C3PO", "Kylo"]
 
 
 def get_player_name() -> str:
@@ -39,6 +39,7 @@ class PlayerState:
 			name = get_player_name()
 		self.name = name
 		self.plate = []
+		self.play_history = []  # History of cards played this round (without chopsticks, would be identical to self.plate)
 		self.total_score = 0
 		self.num_pudding = 0
 
@@ -58,10 +59,10 @@ class PlayerState:
 
 		def remove_one(card):
 			if self.deck_dist[card] <= 0:
-				raise AssertionError('Cannot remove card from deck, already empty')
+				raise AssertionError(f'Cannot remove card from deck, already empty; {cards_to_remove=}, {card=}')  # FIXME: this can trigger with chopsticks + non-omniscient
 
 			if self.num_unseen_dealt_cards <= 0:
-				raise AssertionError('Trying to remove cards already seen from deck distribution')
+				raise AssertionError(f'Trying to remove cards already seen from deck distribution; {cards_to_remove=}, {card=}, {self.num_unseen_dealt_cards=}')
 
 			self.num_unseen_dealt_cards -= 1
 			self.deck_dist[card] -= 1
@@ -100,8 +101,26 @@ class PlayerState:
 				n -= 1
 		return n
 
-	def play_card(self, card):
+	def play_card(self, card: Card):
+		self._play_card(card)
+		self.play_history.append(card)
 
+	def play_chopsticks(self, card1: Card, card2: Card):
+
+		if len(self.hand) < 2:
+			raise ValueError('Cannot play chopsticks, only 1 card left in hand')
+
+		try:
+			self.plate.remove(Card.Chopsticks)
+		except ValueError as ex:
+			raise ValueError('No chopsticks on plate, cannot play 2 cards!') from ex
+
+		self._play_card(card1)
+		self._play_card(card2)
+		self.hand.append(Card.Chopsticks)
+		self.play_history.append((card1, card2))
+
+	def _play_card(self, card: Card):
 		if card not in self.hand:
 			raise ValueError('Cannot play card %s, not in hand: %s' % (card, self.hand))
 
@@ -113,9 +132,10 @@ class PlayerState:
 		if card == Card.Pudding:
 			self.num_pudding += 1
 
-	def end_round(self, score):
-		self.total_score += score
+	def end_round(self, round_score):
+		self.total_score += round_score
 		self.plate = []
+		self.play_history = []
 
 	def update_other_player_state_before_pass(self, verbose=False):
 
@@ -130,9 +150,28 @@ class PlayerState:
 		# Remove last played card from knowledge of hands
 
 		for state in self.other_player_states:
-			last_played_card = state.plate[-1]
+			last_played_card = state.play_history[-1]
+
+			chopstick_extra_card = None
+			if isinstance(last_played_card, tuple):
+				assert len(last_played_card) == 2
+				last_played_card, chopstick_extra_card = last_played_card
+
+			assert isinstance(last_played_card, Card)
+			assert (chopstick_extra_card is None) or isinstance(chopstick_extra_card, Card)
+
+			# TODO: if player with unknown hand used chopsticks, now we know chopsticks are in this hand
+			# However, right now the logic here assumes we know either all or none of a hand; this would break that assumption
+
 			if state.hand:
+				if last_played_card not in state.hand:
+					raise AssertionError(f'Card not in hand: {last_played_card=}, {state.hand=}')
 				state.hand.remove(last_played_card)
+				if chopstick_extra_card is not None:
+					if chopstick_extra_card not in state.hand:
+						raise AssertionError(f'Card not in hand: {chopstick_extra_card=}, {state.hand=}')
+					state.hand.remove(chopstick_extra_card)
+					state.hand.append(Card.Chopsticks)
 			else:
 				self.update_deck_dist(last_played_card)
 
@@ -171,35 +210,38 @@ class PlayerState:
 			self.num_pudding,
 			self.total_score)
 
-	def __repr__(self):
+	def __repr__(self) -> str:
 
-		s = "---- %s state ----\n" % self.name
-
-		s += "plate %s, hand %s, pudding %i, score %i,\n" % (
-			card_names(self.plate, sort=False),
-			card_names(self.hand, sort=False),
-			self.num_pudding,
-			self.total_score)
+		s = 'PlayerState(\n'
+		s += f'  name={self.name},\n'
+		s += f'  plate={card_names(self.plate, sort=False)},\n'
+		s += f'  play_history={card_names(self.play_history, sort=False)},\n'
+		s += f'  hand={card_names(self.hand, sort=False)},\n'
+		s += f'  total_score={self.total_score},\n'
+		s += f'  num_pudding={self.num_pudding},\n'
 
 		if self.other_player_states:
+			s += '  other_player_states=[\n'
 			for state in (self.other_player_states if self.other_player_states is not None else []):
-				s += "%s: plate %s, hand %s, pudding %i, score %i,\n" % (
+				s += "    %s: plate %s, hand %s, pudding %i, score %i,\n" % (
 					state.name,
 					card_names(state.plate, sort=False),
 					card_names(state.hand, sort=False),
 					state.num_pudding,
 					state.total_score)
+			s += '  ],\n'
 		else:
-			s += 'No player states\n'
+			s += '  other_player_states=[],\n'
 
-		s += "deck_dist: %s, %i unseen dealt cards\n" % (dict_card_names(self.deck_dist), self.num_unseen_dealt_cards)
+		s += f"  deck_dist={dict_card_names(self.deck_dist)},\n"
+		s += f"  num_unseen_dealt_cards={self.num_unseen_dealt_cards},\n"
 
-		s += "-- end %s state --\n" % self.name
+		s += ')'
 
 		return s
 
 
-def init_other_player_states(players, forward=True, omniscient=False):
+def init_other_player_states(players, forward=True, omniscient=False, verbose=True):
 
 	players_list = players if forward else list(reversed(players))
 
@@ -231,7 +273,7 @@ def init_other_player_states(players, forward=True, omniscient=False):
 
 		if omniscient:
 			assert player.num_unseen_dealt_cards == 0
-		else:
+		elif verbose:
 			print("%s, %i unseen cards" % (player.name, player.num_unseen_dealt_cards))
 
 

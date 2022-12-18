@@ -89,19 +89,19 @@ def score_round(players: Sequence[PlayerState], print_it=True):
 		print('Scoring:')
 
 	for player in players:
-		score = score_plate(player.plate)
+		round_score = score_plate(player.plate)
 
 		maki = count_maki(player.plate)
 
 		if maki == max_maki_count:
-			score += points_most_maki
+			round_score += points_most_maki
 		elif maki == second_maki_count:
-			score += points_second_most_maki
+			round_score += points_second_most_maki
 
 		if print_it:
-			print("\t%s: %s, score: %i" % (player.name, cards.card_names(player.plate, sort=True), score))
+			print("\t%s: %s, score: %i" % (player.name, cards.card_names(player.plate, sort=True), round_score))
 
-		player.end_round(score)
+		player.end_round(round_score)
 
 	if print_it:
 		print()
