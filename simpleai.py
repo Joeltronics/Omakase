@@ -2,7 +2,7 @@
 
 from ai import AI
 from player import PlayerState
-from cards import Cards, card_names
+from cards import Card, card_names
 from utils import *
 import random
 
@@ -10,7 +10,7 @@ import random
 def _sashimi_avg_pts(num_cards_in_hand: int, player_state: PlayerState) -> int:
 	assert num_cards_in_hand > 0
 
-	n_sashimi_needed = 3 - (count_card(player_state.plate, Cards.Sashimi) % 3)
+	n_sashimi_needed = 3 - (count_card(player_state.plate, Card.Sashimi) % 3)
 
 	if n_sashimi_needed > num_cards_in_hand:
 		return 0
@@ -37,7 +37,7 @@ def _sashimi_avg_pts(num_cards_in_hand: int, player_state: PlayerState) -> int:
 def _tempura_avg_pts(num_cards_in_hand: int, player_state: PlayerState) -> int:
 	assert num_cards_in_hand > 0
 
-	n_tempura_needed = 2 - (count_card(player_state.plate, Cards.Sashimi) % 2)
+	n_tempura_needed = 2 - (count_card(player_state.plate, Card.Sashimi) % 2)
 
 	if n_tempura_needed > num_cards_in_hand:
 		return 0
@@ -52,7 +52,7 @@ def _tempura_avg_pts(num_cards_in_hand: int, player_state: PlayerState) -> int:
 
 
 def _dumpling_avg_pts(player_state: PlayerState) -> int:
-	n_dumpling = count_card(player_state.plate, Cards.Dumpling)
+	n_dumpling = count_card(player_state.plate, Card.Dumpling)
 
 	# If already 5 dumplings, there's no point taking any more
 	if n_dumpling >= 5:
@@ -89,18 +89,18 @@ class SimpleAI(AI):
 		wasabi = player_state.get_num_unused_wasabi() > 0
 
 		avg_points = {
-			Cards.Sashimi: _sashimi_avg_pts(n_cards, player_state),
-			Cards.Tempura: _tempura_avg_pts(n_cards, player_state),
-			Cards.Dumpling: _dumpling_avg_pts(player_state),
-			Cards.SquidNigiri: 9 if wasabi else 3,
-			Cards.SalmonNigiri: 6 if wasabi else 2,
-			Cards.EggNigiri: 3 if wasabi else 1,  # TODO: might want to save wasabi for something better?
-			Cards.Wasabi: min(((n_cards - 1) / 2, 6)),
-			Cards.Maki3: 4.5 / player_state.get_num_players(),
-			Cards.Maki2: 3.0 / player_state.get_num_players(),
-			Cards.Maki1: 1.5 / player_state.get_num_players(),
-			Cards.Pudding: _pudding_avg_pts(player_state),
-			Cards.Chopsticks: 0,  # TODO
+			Card.Sashimi: _sashimi_avg_pts(n_cards, player_state),
+			Card.Tempura: _tempura_avg_pts(n_cards, player_state),
+			Card.Dumpling: _dumpling_avg_pts(player_state),
+			Card.SquidNigiri: 9 if wasabi else 3,
+			Card.SalmonNigiri: 6 if wasabi else 2,
+			Card.EggNigiri: 3 if wasabi else 1,  # TODO: might want to save wasabi for something better?
+			Card.Wasabi: min(((n_cards - 1) / 2, 6)),
+			Card.Maki3: 4.5 / player_state.get_num_players(),
+			Card.Maki2: 3.0 / player_state.get_num_players(),
+			Card.Maki1: 1.5 / player_state.get_num_players(),
+			Card.Pudding: _pudding_avg_pts(player_state),
+			Card.Chopsticks: 0,  # TODO
 		}
 
 		# Pick highest point value card - if tied, then at random from max

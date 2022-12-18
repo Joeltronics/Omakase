@@ -3,39 +3,39 @@
 from collections.abc import Sequence
 from typing import List
 
-from cards import Cards
+from cards import Card
 import cards
 from player import PlayerState
 from utils import *
 
 
-def score_tempura(plate: Sequence[Cards]) -> int:
-	num_tempura = count_card(plate, Cards.Tempura)
+def score_tempura(plate: Sequence[Card]) -> int:
+	num_tempura = count_card(plate, Card.Tempura)
 	return 5 * (num_tempura // 2)
 
 
-def score_sashimi(plate: Sequence[Cards]) -> int:
-	num_sashimi = count_card(plate, Cards.Sashimi)
+def score_sashimi(plate: Sequence[Card]) -> int:
+	num_sashimi = count_card(plate, Card.Sashimi)
 	return 10 * (num_sashimi // 3)
 
 
-def count_maki(plate: Sequence[Cards]) -> int:
-	num_maki = count_card(plate, Cards.Maki1)
-	num_maki += 2 * count_card(plate, Cards.Maki2)
-	num_maki += 3 * count_card(plate, Cards.Maki3)
+def count_maki(plate: Sequence[Card]) -> int:
+	num_maki = count_card(plate, Card.Maki1)
+	num_maki += 2 * count_card(plate, Card.Maki2)
+	num_maki += 3 * count_card(plate, Card.Maki3)
 	return num_maki
 
 
-def score_dumplings(plate: Sequence[Cards]) -> int:
+def score_dumplings(plate: Sequence[Card]) -> int:
 	
-	num_dumpling = count_card(plate, Cards.Dumpling)
+	num_dumpling = count_card(plate, Card.Dumpling)
 	
 	num_dumpling = min(num_dumpling, 5)
 	
 	return [0, 1, 3, 6, 10, 15][num_dumpling]
 
 
-def score_nigiri(plate: Sequence[Cards]) -> int:
+def score_nigiri(plate: Sequence[Card]) -> int:
 
 	# Note: for this, you can *either* convert the Nigiri into WasabiNigiri (and
 	# then remove the Wasabi card from the plate), or if you just leave them all
@@ -52,25 +52,25 @@ def score_nigiri(plate: Sequence[Cards]) -> int:
 	
 	for card in plate:
 		card_score = 0
-		if card is Cards.Wasabi:
+		if card is Card.Wasabi:
 			num_wasabi += 1
 		
-		elif card is Cards.EggNigiri:
+		elif card is Card.EggNigiri:
 			card_score, num_wasabi = score_with_wasabi(1, num_wasabi)
 		
-		elif card is Cards.SalmonNigiri:
+		elif card is Card.SalmonNigiri:
 			card_score, num_wasabi = score_with_wasabi(2, num_wasabi)
 		
-		elif card is Cards.SquidNigiri:
+		elif card is Card.SquidNigiri:
 			card_score, num_wasabi = score_with_wasabi(3, num_wasabi)
 
-		elif card is Cards.WasabiEggNigiri:
+		elif card is Card.WasabiEggNigiri:
 			card_score = 1*3
 
-		elif card is Cards.WasabiSalmonNigiri:
+		elif card is Card.WasabiSalmonNigiri:
 			card_score = 2*3
 
-		elif card is Cards.WasabiSquidNigiri:
+		elif card is Card.WasabiSquidNigiri:
 			card_score = 3*3
 
 		score += card_score
@@ -78,7 +78,7 @@ def score_nigiri(plate: Sequence[Cards]) -> int:
 	return score
 
 
-def score_plate(plate: Sequence[Cards]) -> int:
+def score_plate(plate: Sequence[Card]) -> int:
 	# This only scores cards that count in a plate by itself
 	# e.g. doesn't count Maki or Pudding
 	
@@ -295,27 +295,27 @@ def _test():
 
 	# Tempura
 	for n, s in enumerate([0, 0, 5, 5, 10, 10, 15, 15]):
-		plate = [Cards.Tempura] * n
+		plate = [Card.Tempura] * n
 		ensure_score(plate, s)
 
 	# Sashimi
 	for n, s in enumerate([0, 0, 0, 10, 10, 10, 20, 20, 20, 30]):
-		plate = [Cards.Sashimi] * n
+		plate = [Card.Sashimi] * n
 		ensure_score(plate, s)
 
 	# Dumpling
 	for n, s in enumerate([0, 1, 3, 6, 10, 15, 15, 15, 15]):
-		plate = [Cards.Dumpling] * n
+		plate = [Card.Dumpling] * n
 		ensure_score(plate, s)
 
 	# Nigiri + Wasabi, inline
 	# 2 + 3x3 + 1 = 2 + 9 + 1 = 12
-	plate = [Cards.SalmonNigiri, Cards.Wasabi, Cards.SquidNigiri, Cards.EggNigiri]
+	plate = [Card.SalmonNigiri, Card.Wasabi, Card.SquidNigiri, Card.EggNigiri]
 	ensure_score(plate, 12)
 
 	# Nigiri + Wasabi, using WasabiNigiri cards
 	# 2 + 3x3 + 1 = 2 + 9 + 1 = 12
-	plate = [Cards.SalmonNigiri, Cards.WasabiSquidNigiri, Cards.EggNigiri]
+	plate = [Card.SalmonNigiri, Card.WasabiSquidNigiri, Card.EggNigiri]
 	ensure_score(plate, 12)
 
 	#ensure_score(plate, 13) # DEBUG
@@ -328,10 +328,10 @@ def _test():
 	# Squid = 3 points
 	# Total:  41
 	plate = []
-	plate += [Cards.Tempura] * 5
-	plate += [Cards.Sashimi] * 4
-	plate += [Cards.Dumpling] * 6
-	plate += [Cards.EggNigiri, Cards.SalmonNigiri, Cards.SquidNigiri]
+	plate += [Card.Tempura] * 5
+	plate += [Card.Sashimi] * 4
+	plate += [Card.Dumpling] * 6
+	plate += [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]
 	random.shuffle(plate)
 	ensure_score(plate, 41)
 

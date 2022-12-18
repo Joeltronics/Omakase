@@ -5,23 +5,23 @@ import random
 from typing import List
 
 
-from cards import Cards
+from cards import Card
 
 
 # Standard deck distribution (108 cards)
 _std_deck = {
-	Cards.Tempura: 14,
-	Cards.Sashimi: 14,
-	Cards.Dumpling: 14,
-	Cards.Maki2: 12,
-	Cards.Maki3: 8,
-	Cards.Maki1: 6,
-	Cards.SalmonNigiri: 10,
-	Cards.SquidNigiri: 5,
-	Cards.EggNigiri: 5,
-	Cards.Pudding: 10,
-	Cards.Wasabi: 6,
-	Cards.Chopsticks: 4
+	Card.Tempura: 14,
+	Card.Sashimi: 14,
+	Card.Dumpling: 14,
+	Card.Maki2: 12,
+	Card.Maki3: 8,
+	Card.Maki1: 6,
+	Card.SalmonNigiri: 10,
+	Card.SquidNigiri: 5,
+	Card.EggNigiri: 5,
+	Card.Pudding: 10,
+	Card.Wasabi: 6,
+	Card.Chopsticks: 4
 }
 
 
@@ -36,7 +36,7 @@ class Deck:
 			self.deck += [card] * distribution[card]
 		random.shuffle(self.deck)
 
-	def deal_hand(self, num_cards: int) -> List[Cards]:
+	def deal_hand(self, num_cards: int) -> List[Card]:
 
 		if len(self.deck) < num_cards:
 			raise OverflowError("Not enough cards in deck")
@@ -45,7 +45,7 @@ class Deck:
 		self.deck = self.deck[num_cards:]
 		return hand
 
-	def deal_hands(self, num_players: int, num_cards_per_player: int) -> List[List[Cards]]:
+	def deal_hands(self, num_players: int, num_cards_per_player: int) -> List[List[Card]]:
 		hands = []
 		for _ in range(num_players):
 			hands.append(self.deal_hand(num_cards_per_player))

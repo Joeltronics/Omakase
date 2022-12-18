@@ -13,7 +13,7 @@ from tqdm import tqdm, trange
 from ai import RandomAI, RandomPlusAI
 from simpleai import SimpleAI
 
-from cards import Cards
+from cards import Card
 from deck import Deck, get_deck_distribution
 from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game
@@ -82,10 +82,10 @@ def main():
 	deck_dist = get_deck_distribution()
 
 	if not args.pudding:
-		deck_dist[Cards.Pudding] = 0
+		deck_dist[Card.Pudding] = 0
 
 	if not args.chopsticks:
-		deck_dist[Cards.Chopsticks] = 0
+		deck_dist[Card.Chopsticks] = 0
 
 	ai = [SimpleAI(), RandomPlusAI()]
 	player_names = ['SimpleAI', 'RandomPlusAI']

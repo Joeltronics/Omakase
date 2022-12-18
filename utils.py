@@ -3,10 +3,10 @@
 import random
 from typing import Iterable, Tuple, List
 
-from cards import Cards
+from cards import Card
 
 
-def count_card(plate: Iterable[Cards], card: Cards) -> int:
+def count_card(plate: Iterable[Card], card: Card) -> int:
 	return len([c for c in plate if c == card])
 
 

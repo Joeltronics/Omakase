@@ -5,7 +5,7 @@ import random
 from typing import Optional, List
 
 from utils import *
-from cards import Cards, add_wasabi, remove_wasabi, sort_cards, card_names, dict_card_names
+from cards import Card, add_wasabi, remove_wasabi, sort_cards, card_names, dict_card_names
 
 use_named_players = False
 
@@ -101,9 +101,9 @@ class PlayerState:
 	def get_num_unused_wasabi(self):
 		n = 0
 		for card in self.plate:
-			if card == Cards.Wasabi:
+			if card == Card.Wasabi:
 				n += 1
-			elif n > 0 and card in [Cards.EggNigiri, Cards.SalmonNigiri, Cards.SquidNigiri]:
+			elif n > 0 and card in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]:
 				n -= 1
 		return n
 
@@ -115,14 +115,14 @@ class PlayerState:
 		self.hand.remove(card)
 
 		if use_wasabi_card_variants and self.get_num_unused_wasabi() > 0 and \
-				card in [Cards.EggNigiri, Cards.SalmonNigiri, Cards.SquidNigiri]:
+				card in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]:
 			card = add_wasabi(card, throw_if_cant=True)
-			self.plate.remove(Cards.Wasabi)
+			self.plate.remove(Card.Wasabi)
 
 		# Have to still add to plate
 		self.plate.append(card)
 
-		if card == Cards.Pudding:
+		if card == Card.Pudding:
 			self.num_pudding += 1
 
 	def end_round(self, score):

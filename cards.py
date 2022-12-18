@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List
 
 
 @unique
-class Cards(Enum):
+class Card(Enum):
 	Tempura = 'Tempura'
 	Sashimi = 'Sashimi'
 	Dumpling = 'Dumpling'
@@ -31,12 +31,12 @@ class Cards(Enum):
 
 
 def remove_wasabi(card, throw_if_cant=True):
-	if card == Cards.WasabiSquidNigiri:
-		return Cards.SquidNigiri
-	elif card == Cards.WasabiSalmonNigiri:
-		return Cards.SalmonNigiri
-	elif card == Cards.WasabiEggNigiri:
-		return Cards.EggNigiri
+	if card == Card.WasabiSquidNigiri:
+		return Card.SquidNigiri
+	elif card == Card.WasabiSalmonNigiri:
+		return Card.SalmonNigiri
+	elif card == Card.WasabiEggNigiri:
+		return Card.EggNigiri
 	else:
 		if throw_if_cant:
 			raise ValueError(f'Cannot remove wasabi from {card}')
@@ -44,12 +44,12 @@ def remove_wasabi(card, throw_if_cant=True):
 
 
 def add_wasabi(card, throw_if_cant=True):
-	if card == Cards.SquidNigiri:
-		return Cards.WasabiSquidNigiri
-	elif card == Cards.SalmonNigiri:
-		return Cards.WasabiSalmonNigiri
-	elif card == Cards.EggNigiri:
-		return Cards.WasabiEggNigiri
+	if card == Card.SquidNigiri:
+		return Card.WasabiSquidNigiri
+	elif card == Card.SalmonNigiri:
+		return Card.WasabiSalmonNigiri
+	elif card == Card.EggNigiri:
+		return Card.WasabiEggNigiri
 	else:
 		if throw_if_cant:
 			raise ValueError(f'Cannot add wasabi to {card}')
@@ -58,29 +58,29 @@ def add_wasabi(card, throw_if_cant=True):
 
 def card_sort_order(card):
 	return {
-		Cards.Sashimi: 1,
-		Cards.Tempura: 2,
-		Cards.Dumpling: 3,
-		Cards.WasabiSquidNigiri: 4,
-		Cards.WasabiSalmonNigiri: 5,
-		Cards.WasabiEggNigiri: 6,
-		Cards.SquidNigiri: 7,
-		Cards.SalmonNigiri: 8,
-		Cards.EggNigiri: 9,
-		Cards.Wasabi: 10,
-		Cards.Maki3: 11,
-		Cards.Maki2: 12,
-		Cards.Maki1: 13,
-		Cards.Pudding: 14,
-		Cards.Chopsticks: 15,
+		Card.Sashimi: 1,
+		Card.Tempura: 2,
+		Card.Dumpling: 3,
+		Card.WasabiSquidNigiri: 4,
+		Card.WasabiSalmonNigiri: 5,
+		Card.WasabiEggNigiri: 6,
+		Card.SquidNigiri: 7,
+		Card.SalmonNigiri: 8,
+		Card.EggNigiri: 9,
+		Card.Wasabi: 10,
+		Card.Maki3: 11,
+		Card.Maki2: 12,
+		Card.Maki1: 13,
+		Card.Pudding: 14,
+		Card.Chopsticks: 15,
 	}[card]
 
 
-def sort_cards(cards: Iterable[Cards]) -> List[Cards]:
+def sort_cards(cards: Iterable[Card]) -> List[Card]:
 	return sorted(list(cards), key=card_sort_order)
 
 
-def card_names(cards: Iterable[Cards], sort=False):
+def card_names(cards: Iterable[Card], sort=False):
 
 	if not cards:
 		return "[]"
@@ -92,7 +92,7 @@ def card_names(cards: Iterable[Cards], sort=False):
 	return "[" + ", ".join([str(card) for card in display_list]) + "]"
 
 
-def dict_card_names(cards: Dict[Cards, Any], sort=True):
+def dict_card_names(cards: Dict[Card, Any], sort=True):
 
 	keys = cards.keys()
 	if sort:

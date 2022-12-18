@@ -3,7 +3,7 @@
 import random
 
 from player import PlayerState
-from cards import Cards, card_names
+from cards import Card, card_names
 from utils import *
 
 
@@ -32,37 +32,37 @@ class RandomPlusAI(AI):
 		assert n_cards > 0
 		hand_maybes = set(hand)
 
-		if Cards.Maki3 in hand_maybes:
-			hand_maybes.discard(Cards.Maki2)
-			hand_maybes.discard(Cards.Maki1)
-		elif Cards.Maki2 in hand_maybes:
-			hand_maybes.discard(Cards.Maki1)
+		if Card.Maki3 in hand_maybes:
+			hand_maybes.discard(Card.Maki2)
+			hand_maybes.discard(Card.Maki1)
+		elif Card.Maki2 in hand_maybes:
+			hand_maybes.discard(Card.Maki1)
 
-		if Cards.SquidNigiri in hand_maybes:
-			hand_maybes.discard(Cards.SalmonNigiri)
-			hand_maybes.discard(Cards.EggNigiri)
-		elif Cards.SalmonNigiri in hand_maybes:
-			hand_maybes.discard(Cards.EggNigiri)
+		if Card.SquidNigiri in hand_maybes:
+			hand_maybes.discard(Card.SalmonNigiri)
+			hand_maybes.discard(Card.EggNigiri)
+		elif Card.SalmonNigiri in hand_maybes:
+			hand_maybes.discard(Card.EggNigiri)
 
-		if Cards.Sashimi in hand_maybes:
-			n_sashimi_needed = 3 - (count_card(player_state.plate, Cards.Sashimi) % 3)
+		if Card.Sashimi in hand_maybes:
+			n_sashimi_needed = 3 - (count_card(player_state.plate, Card.Sashimi) % 3)
 			if n_sashimi_needed == 1:
 				# Definitely take sashimi
-				return Cards.Sashimi
+				return Card.Sashimi
 			elif n_sashimi_needed > n_cards:
 				# If it's not physically possibly to score this, don't take it
-				hand_maybes.discard(Cards.Sashimi)
+				hand_maybes.discard(Card.Sashimi)
 
-		if player_state.get_num_unused_wasabi() > 0 and Cards.SquidNigiri in hand_maybes:
-			return Cards.SquidNigiri
+		if player_state.get_num_unused_wasabi() > 0 and Card.SquidNigiri in hand_maybes:
+			return Card.SquidNigiri
 
-		if Cards.Tempura in hand_maybes:
-			n_tempura_needed = 2 - (count_card(player_state.plate, Cards.Sashimi) % 2)
+		if Card.Tempura in hand_maybes:
+			n_tempura_needed = 2 - (count_card(player_state.plate, Card.Sashimi) % 2)
 			if n_tempura_needed == 1:
-				return Cards.Tempura
+				return Card.Tempura
 			elif n_tempura_needed > n_cards:
 				# If it's not physically possibly to score this, don't take it
-				hand_maybes.discard(Cards.Tempura)
+				hand_maybes.discard(Card.Tempura)
 
 		# Pick a card at random from the ones that are left
 
