@@ -34,35 +34,42 @@ class PlayerGameStats:
 	elo: float = DEFAULT_ELO
 
 
-def play_game(game_kwargs):
+def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=False, **game_kwargs):
 
 	random.seed()
 
-	game_kwargs = copy(game_kwargs)
-	num_players = game_kwargs.pop('num_players')
-	player_names = game_kwargs.pop('player_names')
-	ai = game_kwargs.pop('ai')
-
 	inverse_player_order = None
-	if 'randomize_player_order' in game_kwargs and game_kwargs.pop('randomize_player_order'):
+	if randomize_player_order:
 		player_order, inverse_player_order = random_order_and_inverse(num_players)
 		player_names = [player_names[idx] for idx in player_order]
 		ai = [ai[idx] for idx in player_order]
 
-		if game_kwargs['verbose']:
+		if verbose:
 			print('Randomized player order:')
 			for idx, name in enumerate(player_names):
 				print(f'\t{idx + 1}: {name}')
 			print()
 
 	# TODO: once there are stateful AI, will need to create new ones each game
-	game = Game(**game_kwargs, player_names=player_names, ai=ai, num_players=num_players)
+	game = Game(
+		player_names=player_names,
+		ai=ai,
+		num_players=num_players,
+		verbose=verbose,
+		**game_kwargs)
 	result = game.play()
 
 	if inverse_player_order is not None:
 		result = [result[idx] for idx in inverse_player_order]
 
 	return result
+
+
+def _play_game_from_kwargs(kwargs, /):
+	"""
+	Wrapper for play_game, for multiprocessing.Pool.imap purposes
+	"""
+	return play_game(**kwargs)
 
 
 def main():
@@ -97,7 +104,7 @@ def main():
 	else:
 		player_names.extend([f'RandomAI {1+idx}' for idx in range(num_random_ai)])
 
-	game_kwargs = dict(
+	play_game_kwargs = dict(
 		num_players=args.players,
 		deck_dist=deck_dist,
 		omniscient=args.omniscient,
@@ -108,13 +115,13 @@ def main():
 	)
 
 	if args.short:
-		game_kwargs['num_rounds'] = 1
-		game_kwargs['num_cards_per_player'] = 3
+		play_game_kwargs['num_rounds'] = 1
+		play_game_kwargs['num_cards_per_player'] = 3
 
 	player_game_stats = [PlayerGameStats(name=name) for name in player_names]
 
 	if args.num_games == 1:
-		play_game(game_kwargs)
+		play_game(**play_game_kwargs)
 		return
 
 	print(f'{args.players} Players: ' + ', '.join(player_names))
@@ -125,7 +132,7 @@ def main():
 		with Pool() as p:
 			game_results = list(
 				tqdm(
-					p.imap(play_game, itertools.repeat(game_kwargs, args.num_games)),
+					p.imap(_play_game_from_kwargs, itertools.repeat(play_game_kwargs, args.num_games)),
 					total=args.num_games,
 					desc=f'Playing {args.num_games} games (multithreaded)',
 				)
@@ -133,7 +140,7 @@ def main():
 	else:
 		game_results = []
 		for _ in trange(args.num_games, desc=f'Playing {args.num_games} games'):
-			game_results.append(play_game(game_kwargs))
+			game_results.append(play_game(**play_game_kwargs))
 
 	for game_idx, result in enumerate(tqdm(game_results, desc='Processing results')):
 		if len(result) != args.players:
