@@ -2,9 +2,12 @@
 
 import argparse
 from dataclasses import dataclass, field
+import itertools
+from multiprocessing import Pool
+import random
 from typing import List
 
-from tqdm import trange
+from tqdm import tqdm, trange
 
 from ai import RandomAI, RandomPlusAI
 from simpleai import SimpleAI
@@ -27,6 +30,16 @@ class PlayerGameStats:
 	margin_from_winner: int = 0
 	ranks: List[int] = field(default_factory=list)
 	elo: float = DEFAULT_ELO
+
+
+def play_game(game_kwargs):
+
+	random.seed()
+
+	# TODO: randomize order of players
+	# TODO: once there are stateful AI, will need to create new ones each game
+	game = Game(**game_kwargs)
+	return game.play()
 
 
 def main():
@@ -73,28 +86,39 @@ def main():
 	player_game_stats = [PlayerGameStats(name=name) for name in player_names]
 
 	if args.num_games == 1:
-		game = Game(**game_kwargs)
-		game.play()
+		play_game(game_kwargs)
 		return
 
 	print(f'{args.players} Players: ' + ', '.join(player_names))
 
-	for game_idx in trange(args.num_games, desc=f'Playing {args.num_games} games'):
-		# TODO: once there are stateful AI, will need to create new ones each game
-		game = Game(**game_kwargs)
-		results = game.play()
+	use_multiprocessing = args.num_games > 10
 
-		if len(results) != args.players:
-			raise ValueError(f'Game did not return expected length of results ({len(results)} != {args.players})')
+	if use_multiprocessing:
+		with Pool() as p:
+			game_results = list(
+				tqdm(
+					p.imap(play_game, itertools.repeat(game_kwargs, args.num_games)),
+					total=args.num_games,
+					desc=f'Playing {args.num_games} games (multithreaded)',
+				)
+			)
+	else:
+		game_results = []
+		for _ in trange(args.num_games, desc=f'Playing {args.num_games} games'):
+			game_results.append(play_game(game_kwargs))
 
-		winning_score = max(r.score for r in results)
+	for game_idx, result in enumerate(tqdm(game_results, desc='Processing results')):
+		if len(result) != args.players:
+			raise ValueError(f'Game did not return expected length of results ({len(result)} != {args.players})')
+
+		winning_score = max(r.score for r in result)
 
 		new_elos = multiplayer_elo(
-			ranks=[r.rank for r in results],
+			ranks=[r.rank for r in result],
 			ratings=[p.elo for p in player_game_stats],
 			num_prev_games=game_idx)
 
-		for idx, (result, new_elo) in enumerate(zip(results, new_elos)):
+		for idx, (result, new_elo) in enumerate(zip(result, new_elos)):
 			margin = result.score - winning_score
 			player_game_stats[idx].total_num_points += result.score
 			player_game_stats[idx].ranks.append(result.rank)
