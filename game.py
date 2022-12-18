@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from copy import copy, deepcopy
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Sequence, Union
@@ -144,7 +145,7 @@ class Game:
 				self._print("State:")
 				self._print(repr(player))
 
-			card = ai.play_turn(player, player.hand, verbose=verbose)
+			card = ai.play_turn(deepcopy(player), copy(player.hand), verbose=verbose)
 
 			player.play_card(card)
 			self._print(f"Plays: {card}")
