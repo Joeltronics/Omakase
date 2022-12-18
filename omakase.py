@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from copy import copy
 from dataclasses import dataclass, field
 import itertools
 from multiprocessing import Pool
@@ -17,6 +18,7 @@ from deck import Deck, get_deck_distribution
 from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game
 from player import get_player_name
+from utils import random_order_and_inverse
 
 
 def _bool_arg(val) -> bool:
@@ -36,10 +38,31 @@ def play_game(game_kwargs):
 
 	random.seed()
 
-	# TODO: randomize order of players
+	game_kwargs = copy(game_kwargs)
+	num_players = game_kwargs.pop('num_players')
+	player_names = game_kwargs.pop('player_names')
+	ai = game_kwargs.pop('ai')
+
+	inverse_player_order = None
+	if 'randomize_player_order' in game_kwargs and game_kwargs.pop('randomize_player_order'):
+		player_order, inverse_player_order = random_order_and_inverse(num_players)
+		player_names = [player_names[idx] for idx in player_order]
+		ai = [ai[idx] for idx in player_order]
+
+		if game_kwargs['verbose']:
+			print('Randomized player order:')
+			for idx, name in enumerate(player_names):
+				print(f'\t{idx + 1}: {name}')
+			print()
+
 	# TODO: once there are stateful AI, will need to create new ones each game
-	game = Game(**game_kwargs)
-	return game.play()
+	game = Game(**game_kwargs, player_names=player_names, ai=ai, num_players=num_players)
+	result = game.play()
+
+	if inverse_player_order is not None:
+		result = [result[idx] for idx in inverse_player_order]
+
+	return result
 
 
 def main():
@@ -50,7 +73,11 @@ def main():
 	parser.add_argument('--pudding',    metavar='0/1', default=True,  type=_bool_arg, help='Use pudding')
 	parser.add_argument('--chopsticks', metavar='0/1', default=False, type=_bool_arg, help='Use chopsticks')
 	parser.add_argument('--omniscient', metavar='0/1', default=True,  type=_bool_arg, help='Omniscient mode (all players see all cards)')
+	parser.add_argument('--randomize-order', metavar='0/1', default=None, type=_bool_arg, help='Randomize player order (default 1 if multiple games, 0 if not)')
 	args = parser.parse_args()
+
+	if args.randomize_order is None:
+		args.randomize_order = args.num_games > 1
 
 	deck_dist = get_deck_distribution()
 
@@ -75,8 +102,9 @@ def main():
 		deck_dist=deck_dist,
 		omniscient=args.omniscient,
 		player_names=player_names,
-		verbose=(args.num_games == 1),
 		ai=ai,
+		verbose=(args.num_games == 1),
+		randomize_player_order=args.randomize_order,
 	)
 
 	if args.short:
