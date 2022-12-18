@@ -64,15 +64,6 @@ def score_nigiri(plate: Sequence[Card]) -> int:
 		elif card is Card.SquidNigiri:
 			card_score, num_wasabi = score_with_wasabi(3, num_wasabi)
 
-		elif card is Card.WasabiEggNigiri:
-			card_score = 1*3
-
-		elif card is Card.WasabiSalmonNigiri:
-			card_score = 2*3
-
-		elif card is Card.WasabiSquidNigiri:
-			card_score = 3*3
-
 		score += card_score
 
 	return score
@@ -311,11 +302,6 @@ def _test():
 	# Nigiri + Wasabi, inline
 	# 2 + 3x3 + 1 = 2 + 9 + 1 = 12
 	plate = [Card.SalmonNigiri, Card.Wasabi, Card.SquidNigiri, Card.EggNigiri]
-	ensure_score(plate, 12)
-
-	# Nigiri + Wasabi, using WasabiNigiri cards
-	# 2 + 3x3 + 1 = 2 + 9 + 1 = 12
-	plate = [Card.SalmonNigiri, Card.WasabiSquidNigiri, Card.EggNigiri]
 	ensure_score(plate, 12)
 
 	#ensure_score(plate, 13) # DEBUG

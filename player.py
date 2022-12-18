@@ -5,16 +5,9 @@ import random
 from typing import Optional, List
 
 from utils import *
-from cards import Card, add_wasabi, remove_wasabi, sort_cards, card_names, dict_card_names
+from cards import Card, sort_cards, card_names, dict_card_names
 
 use_named_players = False
-
-# If this is true, playing a nigiri on a wasabi replaces it with a "x with Wasabi" card
-# If false, have to manually factor plate order into scoring
-# Everything (currently) is coded so that either format should work
-# Mostly just rely on PlayerState.get_num_unused_wasabi()
-# I've left both in because I'm not sure which will make AI lookahead coding easier
-use_wasabi_card_variants = False
 
 _num_players = 0
 
@@ -114,11 +107,6 @@ class PlayerState:
 
 		self.hand.remove(card)
 
-		if use_wasabi_card_variants and self.get_num_unused_wasabi() > 0 and \
-				card in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]:
-			card = add_wasabi(card, throw_if_cant=True)
-			self.plate.remove(Card.Wasabi)
-
 		# Have to still add to plate
 		self.plate.append(card)
 
@@ -143,7 +131,6 @@ class PlayerState:
 
 		for state in self.other_player_states:
 			last_played_card = state.plate[-1]
-			last_played_card = remove_wasabi(last_played_card, throw_if_cant=False)
 			if state.hand:
 				state.hand.remove(last_played_card)
 			else:

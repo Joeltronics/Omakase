@@ -20,40 +20,8 @@ class Card(Enum):
 	Pudding = 'Pudding'
 	Chopsticks = 'Chopsticks'
 
-	# These aren't "real" cards that can go into the deck, but a card
-	# can get converted into one when played
-	WasabiEggNigiri = 'Egg Nigiri w/ Wasabi'
-	WasabiSalmonNigiri = 'Salmon Nigiri w/ Wasabi'
-	WasabiSquidNigiri = 'Squid Nigiri w/ Wasabi'
-
 	def __str__(self) -> str:
 		return self.value
-
-
-def remove_wasabi(card, throw_if_cant=True):
-	if card == Card.WasabiSquidNigiri:
-		return Card.SquidNigiri
-	elif card == Card.WasabiSalmonNigiri:
-		return Card.SalmonNigiri
-	elif card == Card.WasabiEggNigiri:
-		return Card.EggNigiri
-	else:
-		if throw_if_cant:
-			raise ValueError(f'Cannot remove wasabi from {card}')
-		return card
-
-
-def add_wasabi(card, throw_if_cant=True):
-	if card == Card.SquidNigiri:
-		return Card.WasabiSquidNigiri
-	elif card == Card.SalmonNigiri:
-		return Card.WasabiSalmonNigiri
-	elif card == Card.EggNigiri:
-		return Card.WasabiEggNigiri
-	else:
-		if throw_if_cant:
-			raise ValueError(f'Cannot add wasabi to {card}')
-		return card
 
 
 def card_sort_order(card):
@@ -61,18 +29,15 @@ def card_sort_order(card):
 		Card.Sashimi: 1,
 		Card.Tempura: 2,
 		Card.Dumpling: 3,
-		Card.WasabiSquidNigiri: 4,
-		Card.WasabiSalmonNigiri: 5,
-		Card.WasabiEggNigiri: 6,
-		Card.SquidNigiri: 7,
-		Card.SalmonNigiri: 8,
-		Card.EggNigiri: 9,
-		Card.Wasabi: 10,
-		Card.Maki3: 11,
-		Card.Maki2: 12,
-		Card.Maki1: 13,
-		Card.Pudding: 14,
-		Card.Chopsticks: 15,
+		Card.SquidNigiri: 4,
+		Card.SalmonNigiri: 5,
+		Card.EggNigiri: 6,
+		Card.Wasabi: 7,
+		Card.Maki3: 8,
+		Card.Maki2: 9,
+		Card.Maki1: 10,
+		Card.Pudding: 11,
+		Card.Chopsticks: 12,
 	}[card]
 
 
