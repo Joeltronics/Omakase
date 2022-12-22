@@ -11,7 +11,7 @@ from typing import List
 from tqdm import tqdm, trange
 
 from ai import RandomAI, RandomPlusAI
-from simpleai import SimpleAI
+from tunnel_vision_ai import TunnelVisionAi
 
 from cards import Card
 from deck import Deck, get_deck_distribution
@@ -99,8 +99,8 @@ def main():
 	if not args.chopsticks:
 		deck_dist[Card.Chopsticks] = 0
 
-	ai = [SimpleAI(), RandomPlusAI()]
-	player_names = ['SimpleAI', 'RandomPlusAI']
+	ai = [TunnelVisionAi(), RandomPlusAI()]
+	player_names = ['TunnelVisionAi', 'RandomPlusAI']
 
 	num_random_ai = args.players - len(ai)
 	ai.extend([RandomAI() for _ in range(num_random_ai)])

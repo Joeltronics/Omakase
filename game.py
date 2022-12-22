@@ -9,7 +9,7 @@ from ai import AI
 from cards import Card, card_names
 from deck import Deck, get_deck_distribution
 from player import PlayerState, pass_hands, init_other_player_states
-from simpleai import SimpleAI
+from tunnel_vision_ai import TunnelVisionAi
 import scoring
 
 
@@ -72,7 +72,7 @@ class Game:
 
 		if ai is None:
 			self._print('Creating default AI')
-			self._ai = [SimpleAI() for _ in range(num_players)]
+			self._ai = [TunnelVisionAi() for _ in range(num_players)]
 		elif isinstance(ai, Sequence):
 			if len(ai) != num_players:
 				raise ValueError('Number of AI must match number of players')
@@ -113,7 +113,7 @@ class Game:
 			init_other_player_states(self._player_states, forward=pass_forward, omniscient=self._omniscient, verbose=self.verbose)
 
 			for turn in range(self._num_cards_per_player):
-				self._print('--- Turn %i ---' % (turn+1))
+				self._print('--- Turn %i/%i ---' % (turn+1, self._num_cards_per_player))
 				self._print()
 				self._play_turn(pass_forward=pass_forward)
 				self._pause()
@@ -147,9 +147,9 @@ class Game:
 			verbose = self.verbose and (n == 0)
 
 			self._print(player.name)
-			self._print("Hand: %s" % card_names(player.hand))
 			pudding_str = (" (%i pudding)" % player.num_pudding) if player.num_pudding else ""
 			self._print("Plate: %s%s" % (card_names(player.plate, sort=True), pudding_str))
+			self._print("Hand: %s" % card_names(player.hand))
 
 			if verbose:
 				self._print("State:")

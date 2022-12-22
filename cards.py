@@ -2,7 +2,7 @@
 
 
 from enum import Enum, unique
-from typing import Any, Dict, Iterable, List, Union, Tuple
+from typing import Any, Dict, Iterable, List, Union, Tuple, Optional
 
 
 @unique
@@ -22,6 +22,22 @@ class Card(Enum):
 
 	def __str__(self) -> str:
 		return self.value
+
+	def is_maki(self) -> bool:
+		return self in [Card.Maki1, Card.Maki2, Card.Maki3]
+
+	def is_nigiri(self) -> bool:
+		return self in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]
+
+	def num_maki(self) -> Optional[int]:
+		if self == Card.Maki1:
+			return 1
+		elif self == Card.Maki2:
+			return 2
+		elif self == Card.Maki3:
+			return 3
+		else:
+			return None
 
 
 def card_sort_order(card):

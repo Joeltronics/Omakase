@@ -92,15 +92,6 @@ class PlayerState:
 		self_copy.hand = None
 		return self_copy
 
-	def get_num_unused_wasabi(self):
-		n = 0
-		for card in self.plate:
-			if card == Card.Wasabi:
-				n += 1
-			elif n > 0 and card in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]:
-				n -= 1
-		return n
-
 	def play_card(self, card: Card):
 		self._play_card(card)
 		self.play_history.append(card)
