@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 import itertools
 from multiprocessing import Pool
 import random
-from typing import List
+from typing import List, Optional
 
 from tqdm import tqdm, trange
 
@@ -32,6 +32,7 @@ class PlayerGameStats:
 	margin_from_winner: int = 0
 	ranks: List[int] = field(default_factory=list)
 	elo: float = DEFAULT_ELO
+	elo_history: Optional[List[int]] = None
 
 
 def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=False, random_seed=None, **game_kwargs):
@@ -85,7 +86,12 @@ def main():
 	parser.add_argument('--omniscient', metavar='0/1', default=None,  type=_bool_arg, help='Omniscient mode (all players see all cards) - Default 0, or 1 if --short')
 	parser.add_argument('--single-thread', action='store_true', help='Force single-threaded')
 	parser.add_argument('--pause', dest='pause_after_turn', action='store_true', help='Pause for user input after each round')
+	parser.add_argument('--plot-elo', action='store_true', help='Plot Elo convergence')
 	args = parser.parse_args()
+
+	plt = None
+	if args.plot_elo:
+		from matplotlib import pyplot as plt
 
 	if args.randomize_order is None:
 		args.randomize_order = args.num_games > 1
@@ -127,6 +133,9 @@ def main():
 		play_game_kwargs['num_cards_per_player'] = 3
 
 	player_game_stats = [PlayerGameStats(name=name) for name in player_names]
+	if args.plot_elo:
+		for stats in player_game_stats:
+			stats.elo_history = []
 
 	if args.num_games == 1:
 		play_game(**play_game_kwargs)
@@ -176,6 +185,8 @@ def main():
 			player_game_stats[idx].ranks.append(result.rank)
 			player_game_stats[idx].margin_from_winner += margin
 			player_game_stats[idx].elo = new_elo
+			if player_game_stats[idx].elo_history is not None:
+				player_game_stats[idx].elo_history.append(new_elo)
 
 	print()
 	print(f'Results from {args.num_games} games')
@@ -190,6 +201,26 @@ def main():
 		avg_score = player.total_num_points / args.num_games
 		avg_margin = player.margin_from_winner / args.num_games
 		print(f'{player.name:<16} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f} | {player.elo:>4.0f}')
+
+	if args.plot_elo:
+		assert plt is not None
+		print()
+		print('Plotting Elo ratings')
+
+		fig, ax = plt.subplots(1, 1)
+		fig.suptitle('Elo rating convergence')
+
+		for player in player_game_stats:
+			assert player.elo_history is not None
+			ax.plot(player.elo_history, label=player.name)
+
+		ax.grid()
+		ax.legend()
+		ax.set_xlabel('Game number')
+		ax.set_ylabel('Elo rating')
+		print('Showing plots')
+		plt.show()
+
 
 
 if __name__ == "__main__":

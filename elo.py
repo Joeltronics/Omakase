@@ -6,7 +6,7 @@ from typing import Tuple, List, Iterable, Optional
 
 DEFAULT_ELO = 1500
 MIN_ELO = 100
-MIN_K = 10
+MIN_K = 2
 MAX_K = 32
 
 
