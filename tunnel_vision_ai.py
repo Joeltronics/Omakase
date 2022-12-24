@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 from ai import AI
@@ -28,11 +29,102 @@ So because there's much more uncertainty in blocked points than in our points, w
 DEFAULT_BLOCKING_POINT_SCALE = 0.25
 
 
+@dataclass
+class CardPointsBreakdown:
+
+	points_now: int = 0
+	avg_future_points: Union[float, int] = 0
+
+	rel_points_blocking_per_player: Union[float, int] = 0
+	# avg_rel_points_blocking: Union[float, int] = 0
+	avg_opportunity_cost: Union[float, int] = 0
+
+	num_other_players: Optional[int] = None
+
+	blocking_points_scale: Optional[float] = None
+	opportunity_cost_scale: Optional[float] = None
+
+	@property
+	def avg_points_me(self) -> Union[int, float]:
+		return self.points_now + self.avg_future_points
+
+	@property
+	def avg_rel_points_blocking(self) -> float:
+		if self.num_other_players is None:
+			raise ValueError('num_other_players is not set')
+		return self.rel_points_blocking_per_player / self.num_other_players
+
+	@property
+	def total(self) -> float:
+		opportunity_scale = self.opportunity_cost_scale if self.opportunity_cost_scale is not None else 1.0
+		if self.rel_points_blocking_per_player:
+			# avg_rel_points_blocking will throw if num_other_players is unset
+			blocking_scale = self.blocking_points_scale if self.blocking_points_scale is not None else 1.0
+			return self.avg_points_me + blocking_scale*self.avg_rel_points_blocking - opportunity_scale*self.avg_opportunity_cost
+		else:
+			return self.avg_points_me + opportunity_scale*self.avg_opportunity_cost
+
+	def __add__(self, other):
+
+		def _match(name):
+			mine = getattr(self, name)
+			others = getattr(other, name)
+			if (mine is not None) and (others is not None) and (mine != others):
+				raise ValueError(f'Cannot add different CardPointsBreakdown with different {name} ({mine} vs {others})')
+			return mine if mine is not None else others
+
+		num_other_players = _match('num_other_players')
+		blocking_points_scale = _match('blocking_points_scale')
+		opportunity_cost_scale = _match('opportunity_cost_scale')
+
+		return CardPointsBreakdown(
+			# avg_points_me=self.avg_points_me + other.avg_points_me,
+			points_now=self.points_now + other.points_now,
+			avg_future_points=self.avg_future_points + other.avg_future_points,
+
+			# avg_rel_points_blocking=self.avg_rel_points_blocking + other.avg_rel_points_blocking,
+			rel_points_blocking_per_player=self.rel_points_blocking_per_player + other.rel_points_blocking_per_player,
+
+			avg_opportunity_cost=self.avg_opportunity_cost + other.avg_opportunity_cost,
+			num_other_players=num_other_players,
+			blocking_points_scale=blocking_points_scale,
+			opportunity_cost_scale=opportunity_cost_scale,
+		)
+
+	def __str__(self) -> str:
+
+		s = f'{self.total:.2f} = '
+
+		if self.points_now:
+			s += f'({self.points_now} now)'
+
+		if self.avg_future_points:
+			if self.points_now:
+				s += ' + '
+			s += f'({self.avg_future_points:.2f} future)'
+
+		if self.avg_rel_points_blocking:
+			s += ' + '
+			if self.blocking_points_scale is not None and self.blocking_points_scale != 1.0:
+				s += f'{self.blocking_points_scale:.2g}*'
+			s += f'({self.rel_points_blocking_per_player:.2f} blocking)'
+			if self.num_other_players != 1:
+				s += f'/{self.num_other_players}'
+
+		if self.avg_opportunity_cost:
+			s += ' - '
+			if self.opportunity_cost_scale is not None and self.opportunity_cost_scale != 1.0:
+				s += f'{self.opportunity_cost_scale:.2g}*'
+			s += f'({self.avg_opportunity_cost:.2f}) opportunity'
+
+		return s
+
+
 def _sashimi_avg_pts(
 		num_cards_in_hand: int,
 		plate: Optional[Sequence[Card]],
 		num_chopsticks: Optional[int],
-		) -> int:
+		) -> CardPointsBreakdown:
 	assert num_cards_in_hand > 0
 
 	if plate is None:
@@ -45,11 +137,11 @@ def _sashimi_avg_pts(
 	num_cards_yet_to_see = num_cards_in_hand * (num_cards_in_hand - 1) // 2
 
 	if num_sashimi_needed > num_cards_in_hand:
-		return 0
+		return CardPointsBreakdown(0)
 
 	if num_sashimi_needed == 1:
 		# If this one completes a set, then this is straight-up 10 points, no further calculations needed
-		return 10
+		return CardPointsBreakdown(10)
 
 	elif num_sashimi_needed == 2:
 		# What are the odds we will see 1 more after this one?
@@ -60,7 +152,8 @@ def _sashimi_avg_pts(
 
 		# Right now (before we've sunk the cost), this one card is only worth half the 10 points
 		# 8-card game, turn 2: 5 points
-		return (10/2) * min(1.0, avg_num_sashimi_yet_to_see)
+		avg_future_points = (10/2) * min(1.0, avg_num_sashimi_yet_to_see)
+		return CardPointsBreakdown(avg_future_points=avg_future_points)
 
 	elif num_sashimi_needed == 3:
 		# What are the odds we will see 2 more? (on 2 separate hands, unless num_chopsticks)
@@ -81,36 +174,35 @@ def _sashimi_avg_pts(
 		# Scale by 90% to adjust for probability we would actually take the 2nd sashimi (3rd is considered a sure thing)
 
 		# 8-card game, turns 1-2: 3 points (regardless of chopsticks)
-		return (10/3) * min(1.0, odds_seeing_2_sashimi) * 0.9
+		avg_future_points = (10/3) * min(1.0, odds_seeing_2_sashimi) * 0.9
+		return CardPointsBreakdown(avg_future_points=avg_future_points)
 
 
-def _tempura_avg_pts(
-		num_cards_in_hand: int,
-		plate: Optional[Sequence[Card]],
-		) -> int:
+def _tempura_avg_pts(num_cards_in_hand: int, plate: Optional[Sequence[Card]]) -> CardPointsBreakdown:
 	assert num_cards_in_hand > 0
 
 	if plate is None:
 		# General case - on average, how many points is this worth for an arbitrary player we know nothing else about?
 		# TODO: factor in num_cards_in_hand?
-		return 2
+		return CardPointsBreakdown(avg_future_points=2)
 
 	num_tempura_needed = get_num_tempura_needed(plate)
 	num_cards_yet_to_see = num_cards_in_hand * (num_cards_in_hand - 1) // 2
 
 	if num_tempura_needed > num_cards_in_hand:
-		return 0
+		return CardPointsBreakdown(0)
 
 	if num_tempura_needed == 1:
-		return 5
+		return CardPointsBreakdown(5)
 
 	elif num_tempura_needed == 2:
 		# 8-card game, turn 1: 3.4
 		avg_num_tempura_yet_to_see = num_cards_yet_to_see * 13/107
-		return (5/2) * min(1.0, avg_num_tempura_yet_to_see)
+		avg_future_points =  (5/2) * min(1.0, avg_num_tempura_yet_to_see)
+		return CardPointsBreakdown(avg_future_points=avg_future_points)
 
 
-def _wasabi_avg_points(num_cards_in_hand: int, num_unused_wasabi: Optional[int]) -> Union[int, float]:
+def _wasabi_avg_points(num_cards_in_hand: int, num_unused_wasabi: Optional[int]) -> CardPointsBreakdown:
 
 	if num_unused_wasabi is None:
 		# General case - on average, how many points is this worth for an arbitrary player we know nothing else about?
@@ -119,10 +211,16 @@ def _wasabi_avg_points(num_cards_in_hand: int, num_unused_wasabi: Optional[int])
 
 	# 8-card game, turn 1: worth 3.5 points
 	# 8-card game, turn 2: worth 3 points, or 1.5 if we already have wasabi
-	return min((num_cards_in_hand - 1) / (2 ** (1 + num_unused_wasabi)), 6)
+	avg_future_points = min((num_cards_in_hand - 1) / (2 ** (1 + num_unused_wasabi)), 6)
+	return CardPointsBreakdown(avg_future_points=avg_future_points)
 
 
-def _nigiri_opportunity_cost(card: Card, num_unused_wasabi: Optional[int], num_cards_on_plate: int, num_cards_in_hand: int) -> Union[int, float]:
+def _nigiri_opportunity_cost(
+		card: Card,
+		num_unused_wasabi: Optional[int],
+		num_cards_on_plate: int,
+		num_cards_in_hand: int,
+		) -> Union[int, float]:
 
 	# If this is a squid, then we can't possibly do better; no opportunity cost
 	if card not in [Card.EggNigiri, Card.SalmonNigiri]:
@@ -168,9 +266,14 @@ def _nigiri_opportunity_cost(card: Card, num_unused_wasabi: Optional[int], num_c
 		raise AssertionError(repr(card))
 
 
-def _nigiri_avg_points(card: Card, num_unused_wasabi: Optional[int], num_cards_on_plate: int, num_cards_in_hand: int) -> Union[float, int]:
+def _nigiri_avg_points(
+		card: Card,
+		num_unused_wasabi: Optional[int],
+		num_cards_on_plate: int,
+		num_cards_in_hand: int,
+		) -> CardPointsBreakdown:
 
-	opportunity_cost = _nigiri_opportunity_cost(
+	avg_opportunity_cost = _nigiri_opportunity_cost(
 		card,
 		num_unused_wasabi,
 		num_cards_on_plate=num_cards_on_plate,
@@ -186,41 +289,41 @@ def _nigiri_avg_points(card: Card, num_unused_wasabi: Optional[int], num_cards_o
 		wasabi_scale = 1
 
 	if card == Card.SquidNigiri:
-		return 3*wasabi_scale - opportunity_cost
+		return CardPointsBreakdown(3*wasabi_scale, avg_opportunity_cost=avg_opportunity_cost)
 
 	if card == Card.SalmonNigiri:
-		return 2*wasabi_scale - opportunity_cost
+		return CardPointsBreakdown(2*wasabi_scale, avg_opportunity_cost=avg_opportunity_cost)
 
 	if card == Card.EggNigiri:
-		return wasabi_scale - opportunity_cost
+		return CardPointsBreakdown(wasabi_scale, avg_opportunity_cost=avg_opportunity_cost)
 
 	raise KeyError(repr(card))
 
 
-def _maki_avg_points(card: Card, num_players: int) -> float:
+def _maki_avg_points(card: Card, num_players: int) -> CardPointsBreakdown:
 	if card == Card.Maki3:
-		return 4.5 / num_players
+		return CardPointsBreakdown(avg_future_points=(4.5 / num_players))
 	
 	if card == Card.Maki2:
-		return 3.0 / num_players
+		return CardPointsBreakdown(avg_future_points=(3.0 / num_players))
 	
 	if card == Card.Maki1:
-		return 1.5 / num_players
+		return CardPointsBreakdown(avg_future_points=(1.5 / num_players))
 	
 	raise KeyError(repr(card))
 
 
-def _dumpling_avg_pts(num_cards_in_hand: int, plate: Optional[Sequence[Card]]) -> int:
+def _dumpling_avg_pts(num_cards_in_hand: int, plate: Optional[Sequence[Card]]) -> CardPointsBreakdown:
 
 	if plate is None:
 		# General case - on average, how many points is this worth for an arbitrary player we know nothing else about?
-		return 2
+		return CardPointsBreakdown(avg_future_points=2)
 
 	n_dumpling = count_card(plate, Card.Dumpling)
 
 	# If already 5 dumplings, there's no point taking any more
 	if n_dumpling >= 5:
-		return 0
+		return CardPointsBreakdown(0)
 
 	points_this_dumpling = n_dumpling + 1
 
@@ -243,27 +346,27 @@ def _dumpling_avg_pts(num_cards_in_hand: int, plate: Optional[Sequence[Card]]) -
 	avg_points_future_dumplings = avg_num_dumplings_yet_to_take
 
 	# 8-card game, turn 1: 1 + 1.7 = 2.7
-	return points_this_dumpling + avg_points_future_dumplings
+	return CardPointsBreakdown(points_now=points_this_dumpling, avg_future_points=avg_points_future_dumplings)
 
 
-def _pudding_avg_pts(num_players: int) -> float:
+def _pudding_avg_pts(num_players: int) -> CardPointsBreakdown:
 	if num_players > 2:
 		# 12 points total, across 3 rounds
 		# 5-player: 0.8 points
 		# 4-player: 1 point
 		# 3-player: 1.33 points
-		return 4 / num_players
+		return CardPointsBreakdown(avg_future_points=(4 / num_players))
 	else:
 		# In 2-player, there's no -6, so 6 points total; worth 1 point
-		return 2 / num_players
+		return CardPointsBreakdown(avg_future_points=(2 / num_players))
 
 
-def _chopsticks_avg_points(num_chopsticks: Optional[int], num_cards_on_plate: int, num_cards_in_hand: int) -> Union[int, float]:
+def _chopsticks_avg_points(num_chopsticks: Optional[int], num_cards_on_plate: int, num_cards_in_hand: int) -> CardPointsBreakdown:
 
 	if num_chopsticks is None:
 		# General case - on average, how many points is this worth for an arbitrary player we know nothing else about?
 		num_remaining_turns_could_use_these_chopsticks = max(num_cards_in_hand - 2 - 1, 0)
-		return 0.5 * num_remaining_turns_could_use_these_chopsticks
+		return CardPointsBreakdown(avg_future_points=(0.5 * num_remaining_turns_could_use_these_chopsticks))
 
 	assert num_chopsticks >= 0
 
@@ -271,7 +374,7 @@ def _chopsticks_avg_points(num_chopsticks: Optional[int], num_cards_on_plate: in
 	num_remaining_turns_could_use_these_chopsticks = num_cards_in_hand - 2 - num_chopsticks
 
 	if num_remaining_turns_could_use_these_chopsticks <= 0:
-		return 0
+		return CardPointsBreakdown(0)
 
 	# num_cards_yet_to_see = num_cards_in_hand * (num_cards_in_hand - 1) // 2
 
@@ -281,7 +384,7 @@ def _chopsticks_avg_points(num_chopsticks: Optional[int], num_cards_on_plate: in
 
 	# 8-card game, turn 1: 3 points
 
-	return points
+	return CardPointsBreakdown(avg_future_points=points)
 
 
 def _using_chopsticks_opportunity_cost(num_chopsticks: int, num_cards_on_plate: int, num_cards_in_hand: int) -> Union[int, float]:
@@ -312,7 +415,7 @@ def _avg_points_not_counting_blocking(
 		num_unused_wasabi: Optional[int],
 		num_chopsticks: Optional[int],
 		num_cards_on_plate: Optional[int] = None,
-		) -> Union[int, float]:
+		) -> CardPointsBreakdown:
 
 	if num_cards_on_plate is None:
 		if plate is None:
@@ -356,9 +459,10 @@ def _avg_points(
 		num_unused_wasabi: int,
 		num_chopsticks: int,
 		blocking_point_scale: float,
-		) -> float:
+		# ) -> float:
+		) -> CardPointsBreakdown:
 
-	avg_points_me = _avg_points_not_counting_blocking(
+	points_me = _avg_points_not_counting_blocking(
 		card=card,
 		plate=plate,
 		num_cards=num_cards,
@@ -375,9 +479,28 @@ def _avg_points(
 		num_unused_wasabi=None,
 		num_chopsticks=None,
 		num_cards_on_plate=len(plate),
-	) / (num_players - 1)
+	)
 
-	return avg_points_me + blocking_point_scale * avg_relative_points_from_blocking
+	# return avg_points_me + blocking_point_scale * avg_relative_points_from_blocking
+
+	if isinstance(avg_relative_points_from_blocking, CardPointsBreakdown):
+		# assert avg_relative_points_from_blocking.avg_rel_points_blocking == 0
+		assert avg_relative_points_from_blocking.rel_points_blocking_per_player == 0
+		avg_relative_points_from_blocking = avg_relative_points_from_blocking.total
+
+	# avg_relative_points_from_blocking = avg_relative_points_from_blocking / (num_players - 1)
+
+	assert isinstance(points_me, CardPointsBreakdown)
+
+	# if not isinstance(points_me, CardPointsBreakdown):
+	# 	points_me = CardPointsBreakdown(avg_points_me=points_me)
+	# assert points_me.avg_rel_points_blocking == 0
+	assert points_me.rel_points_blocking_per_player == 0
+
+	# avg_relative_points_from_blocking = CardPointsBreakdown(0, avg_rel_points_blocking=avg_relative_points_from_blocking, num_other_players=(num_players - 1))
+	avg_relative_points_from_blocking = CardPointsBreakdown(0, rel_points_blocking_per_player=avg_relative_points_from_blocking, num_other_players=(num_players - 1))
+
+	return points_me + avg_relative_points_from_blocking
 
 
 def _pair_avg_points(
@@ -388,7 +511,8 @@ def _pair_avg_points(
 		num_unused_wasabi: int,
 		num_chopsticks: int,
 		blocking_point_scale: float,
-		) -> Union[int, float]:
+		# ) -> Union[int, float]:
+		) -> CardPointsBreakdown:
 
 	assert num_cards >= 2
 	assert num_chopsticks >= 1
@@ -434,8 +558,9 @@ Doesn't look at other players' hands/plates, or what other cards are still out t
 Minimal regard for opportunity cost of future moves
 """
 class TunnelVisionAi(AI):
-	def __init__(self, blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE):
+	def __init__(self, blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE, opportunity_cost_scale=1.0):
 		self.blocking_point_scale = blocking_point_scale
+		self.opportunity_cost_scale = opportunity_cost_scale
 
 	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
 		n_cards = len(hand)
@@ -454,7 +579,7 @@ class TunnelVisionAi(AI):
 
 		# TODO: could make this slightly more efficient by eliminating some obvious picks (don't take lower nigiri or Maki)
 		cards_points = {
-			card: float(_avg_points(
+			card: _avg_points(
 				card,
 				plate=plate,
 				num_cards=len(hand),
@@ -462,7 +587,7 @@ class TunnelVisionAi(AI):
 				num_unused_wasabi=num_unused_wasabi,
 				num_chopsticks=num_chopsticks,
 				blocking_point_scale=self.blocking_point_scale,
-			)) for card in set(hand)
+			) for card in set(hand)
 		}
 
 		if can_use_chopsticks:
@@ -474,8 +599,7 @@ class TunnelVisionAi(AI):
 
 			chopstick_pairs = meaningful_chopstick_pairs(hand=hand, num_unused_wasabi=num_unused_wasabi)
 			for chopstick_pair in chopstick_pairs:
-				cards_points[chopstick_pair] = float(
-					_pair_avg_points(
+				points = _pair_avg_points(
 						chopstick_pair,
 						plate=plate,
 						num_cards=len(hand),
@@ -483,26 +607,38 @@ class TunnelVisionAi(AI):
 						num_unused_wasabi=num_unused_wasabi,
 						num_chopsticks=num_chopsticks,
 						blocking_point_scale=self.blocking_point_scale,
-				)) - chopstick_opportunity_cost
+				)
+				points = points + CardPointsBreakdown(avg_opportunity_cost=chopstick_opportunity_cost)
+				cards_points[chopstick_pair] = points
+
+		# Add number of players & scale values
+
+		for v in cards_points.values():
+			v.num_other_players = num_players - 1
+			v.blocking_points_scale = self.blocking_point_scale
+			v.opportunity_cost_scale = self.opportunity_cost_scale
+
+		if verbose:
+			print_list = sorted(list(cards_points.items()), key=lambda pair: pair[1].total, reverse=True)
+
+			print('Possible picks:')
+			for card, points in print_list:
+				print(f'\t{str(card) + ":":16s} {points}')
 
 		# Take highest point value option (if tied, take random from tied)
 
-		max_points = max(cards_points.values())
+		max_points = max([v.total for v in cards_points.values()])
 		max_point_picks = [
 			card
 			for card, points
 			in cards_points.items()
-			if points >= (max_points - FLOAT_EPSILON)
+			if points.total >= (max_points - FLOAT_EPSILON)
 		]
 
 		if verbose:
-			print_list = sorted(list(cards_points.items()), key=lambda pair: pair[1], reverse=True)
-			print_list = ["%s: %.2f" % card for card in print_list]
-			print_list = ", ".join(print_list)
-
 			if len(max_point_picks) > 1:
-				print('Point values: {%s}, picking randomly from top: [%s]' % (print_list, card_names(max_point_picks)))
+				print(f'Picking randomly from top: [{card_names(max_point_picks)}]')
 			else:
-				print('Point values: {%s}, picking highest: %s' % (print_list, max_point_picks[0]))
+				print(f'Picking highest: {max_point_picks[0]}')
 
 		return random.choice(max_point_picks)
