@@ -79,17 +79,19 @@ def main():
 	parser.add_argument('-n', '--num-games', default=1, type=int, help='Number of games to play')
 	parser.add_argument('--seed', type=int, help='Deterministic random seed (currently only works for single-threaded)')
 	parser.add_argument('--short', action='store_true', help='Play very short game (1 round of 3 cards)')
-	parser.add_argument('--pudding',    metavar='0/1', default=True,  type=_bool_arg, help='Use pudding')
-	parser.add_argument('--chopsticks', metavar='0/1', default=True, type=_bool_arg, help='Use chopsticks')
-	# TODO: make omniscient default False (unless --short)
-	parser.add_argument('--omniscient', metavar='0/1', default=True,  type=_bool_arg, help='Omniscient mode (all players see all cards)')
-	parser.add_argument('--randomize-order', metavar='0/1', default=None, type=_bool_arg, help='Randomize player order (default 1 if multiple games, 0 if not)')
+	parser.add_argument('--pudding',    metavar='0/1', default=True,  type=_bool_arg, help='Use pudding - Default 1')
+	parser.add_argument('--chopsticks', metavar='0/1', default=True, type=_bool_arg, help='Use chopsticks - Default 1')
+	parser.add_argument('--randomize-order', metavar='0/1', default=None, type=_bool_arg, help='Randomize player order - Default 1 if multiple games, 0 if not')
+	parser.add_argument('--omniscient', metavar='0/1', default=None,  type=_bool_arg, help='Omniscient mode (all players see all cards) - Default 0, or 1 if --short')
 	parser.add_argument('--single-thread', action='store_true', help='Force single-threaded')
 	parser.add_argument('--pause', dest='pause_after_turn', action='store_true', help='Pause for user input after each round')
 	args = parser.parse_args()
 
 	if args.randomize_order is None:
 		args.randomize_order = args.num_games > 1
+
+	if args.omniscient is None:
+		args.omniscient = args.short
 
 	deck_dist = get_deck_distribution()
 

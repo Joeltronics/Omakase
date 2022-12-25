@@ -8,7 +8,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Union
 from ai import AI
 from cards import Card, card_names
 from deck import Deck, get_deck_distribution
-from player import PlayerState, pass_hands, init_other_player_states
+from player import PlayerState, init_other_player_states_after_dealing_hands, pass_hands
 from tunnel_vision_ai import TunnelVisionAi
 import scoring
 
@@ -66,9 +66,14 @@ class Game:
 			player_names = [None] * num_players
 		elif len(player_names) != num_players:
 			raise ValueError('Number of player names must match number of players')
+		elif len(player_names) != len(set(player_names)):
+			raise ValueError('Player names must be unique!')
 
 		self._print('Creating players')
-		self._player_states = [PlayerState(deck_dist, name=name) for name in player_names]
+		self._player_states = [PlayerState(deck_dist, name=name, show_hand=omniscient) for name in player_names]
+		self._public_states_dict = {p.name: p.public_state for p in self._player_states}
+
+		assert len(self._player_states) == len(set([p.name for p in self._player_states])), "Player names should be guaranteed unique at this point"
 
 		if ai is None:
 			self._print('Creating default AI')
@@ -77,8 +82,6 @@ class Game:
 			if len(ai) != num_players:
 				raise ValueError('Number of AI must match number of players')
 			self._ai = ai
-
-		self._omniscient = omniscient
 
 	def _print(self, *args, **kwargs):
 		if self.verbose:
@@ -96,11 +99,11 @@ class Game:
 		self._print('Starting game')
 		self._print()
 
-		for round_num in range(self._num_rounds):
-			pass_forward = (round_num % 2 == 0)
+		for round_idx in range(self._num_rounds):
+			round_pass_forward = (round_idx % 2 == 0)
 
 			if self._num_rounds > 1:
-				self._print('==== Round %i =====' % (round_num+1))
+				self._print('==== Round %i/%i =====' % (round_idx+1, self._num_rounds))
 
 			hands = self._deck.deal_hands(self._num_players, self._num_cards_per_player)
 
@@ -110,12 +113,16 @@ class Game:
 				self._print("\t%s: %s" % (player.name, card_names(player.hand)))
 			self._print()
 
-			init_other_player_states(self._player_states, forward=pass_forward, omniscient=self._omniscient, verbose=self.verbose)
+			init_other_player_states_after_dealing_hands(
+				self._player_states, round_pass_forward=round_pass_forward, verbose=self.verbose)
 
-			for turn in range(self._num_cards_per_player):
-				self._print('--- Turn %i/%i ---' % (turn+1, self._num_cards_per_player))
+			for turn_idx in range(self._num_cards_per_player):
+				if self._num_rounds > 1:
+					self._print('--- Round %i/%i, Turn %i/%i ---' % (round_idx + 1, self._num_rounds, turn_idx + 1, self._num_cards_per_player))
+				else:
+					self._print('--- Turn %i/%i ---' % (turn_idx + 1, self._num_cards_per_player))
 				self._print()
-				self._play_turn(pass_forward=pass_forward)
+				self._play_turn(pass_forward=round_pass_forward)
 				self._pause()
 
 			scoring.score_round(self._player_states, print_it=self.verbose)
@@ -153,7 +160,7 @@ class Game:
 
 			if verbose:
 				self._print("State:")
-				self._print(repr(player))
+				self._print(player.dump())
 
 			card_or_pair = ai.play_turn(deepcopy(player), copy(player.hand), verbose=verbose)
 
@@ -171,7 +178,7 @@ class Game:
 
 		for idx, player in enumerate(self._player_states):
 			verbose = debug_update_player_state_verbose and (idx == 0)
-			player.update_other_player_state_before_pass(verbose=verbose)
+			player.update_other_player_state_before_pass(self._public_states_dict, verbose=verbose)
 
 		self._print('Passing cards %s' % ('forward' if pass_forward else 'backward'))
 		pass_hands(self._player_states, forward=pass_forward)

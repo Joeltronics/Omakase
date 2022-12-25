@@ -192,7 +192,7 @@ def score_puddings(players: Sequence[PlayerState], print_it=True):
 		if player.num_pudding == min_pudding_count:
 			score -= neg_points_least_pudding
 
-		player.total_score += score
+		player.score_puddings(score)
 
 		if print_it:
 			print("\t%s: %i pudding (%i points), total score: %i" % (player.name, player.num_pudding, score, player.total_score))

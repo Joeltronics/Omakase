@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
-import copy
+from collections import Counter
+from collections.abc import Sequence
+from copy import copy, deepcopy
+from dataclasses import dataclass, field
 import random
-from typing import Optional, List
+from typing import Optional, List, Iterable, Union
 
 from utils import *
 from cards import Card, sort_cards, card_names, dict_card_names
@@ -31,66 +34,94 @@ def get_player_name() -> str:
 		return "Player %i" % _num_players
 
 
+@dataclass
+class PublicPlayerState:
+	name: str
+	plate: list[Card] = field(default_factory=list)
+	play_history: list[Card] = field(default_factory=list)  # History of cards played this round (would be identical to self.plate without chopsticks/pudding)
+	total_score: int = 0
+	num_pudding: int = 0
+
+	hand: Optional[list[Card]] = None
+
+
 class PlayerState:
-	def __init__(self, deck_dist: dict, name=None):
+	def __init__(self, deck_dist: dict, name='', show_hand=False):
 
 		# Public info
+
 		if not name:
 			name = get_player_name()
-		self.name = name
-		self.plate = []
-		self.play_history = []  # History of cards played this round (without chopsticks, would be identical to self.plate)
-		self.total_score = 0
-		self.num_pudding = 0
+		
+		self.public_state = PublicPlayerState(name=name)
+		self.plate = self.public_state.plate
+		self.play_history = self.public_state.play_history
 
 		# Knowledge of deck and other players' state
-		self.deck_dist = copy.deepcopy(deck_dist)
-		self.other_player_states: Optional[List] = None
-		self.num_unseen_dealt_cards = None
+		self.deck_dist = deepcopy(deck_dist)
+		self.other_player_states: List[PublicPlayerState] = []
+		self.num_unseen_dealt_cards = 0
 
 		# Private info
-		self.hand = None
+		self.hand: Optional[List] = None
+		self.passing_hand = None
+
+		self.show_hand = show_hand
+
+	@property
+	def name(self) -> str:
+		return self.public_state.name
+
+	@property
+	def total_score(self) -> int:
+		return self.public_state.total_score
+
+	@property
+	def num_pudding(self) -> int:
+		return self.public_state.num_pudding
 
 	def assign_hand(self, hand):
 		# Sorting not actually necessary, but helps print formatting
 		self.hand = sort_cards(hand)
 
-	def update_deck_dist(self, cards_to_remove):
+		if self.show_hand:
+			self.public_state.hand = self.hand
 
-		def remove_one(card):
-			if self.deck_dist[card] <= 0:
-				raise AssertionError(f'Cannot remove card from deck, already empty; {cards_to_remove=}, {card=}')  # FIXME: this can trigger with chopsticks + non-omniscient
+	def update_deck_dist(self, cards_to_remove: Union[Card, Iterable[Card], Counter[Card]], previously_unseen=True):
 
-			if self.num_unseen_dealt_cards <= 0:
-				raise AssertionError(f'Trying to remove cards already seen from deck distribution; {cards_to_remove=}, {card=}, {self.num_unseen_dealt_cards=}')
+		def remove(card: Card, num=1):
+			assert num > 0
 
-			self.num_unseen_dealt_cards -= 1
-			self.deck_dist[card] -= 1
+			if self.deck_dist[card] < num:
+				raise AssertionError(f'Cannot remove card from deck, already empty; {cards_to_remove=}, {card=}, {num=}, deck_dist={dict_card_names(self.deck_dist)}')
 
-		if hasattr(cards_to_remove, "__iter__"):
+			if previously_unseen and self.num_unseen_dealt_cards < num:
+				raise AssertionError(f'All cards are seen, but trying to remove cards from deck distribution; {cards_to_remove=}, {card=}, {num=}, {self.num_unseen_dealt_cards=}')
 
+			self.deck_dist[card] -= num
+			if previously_unseen:
+				self.num_unseen_dealt_cards -= num
+
+		if isinstance(cards_to_remove, Card):
+			remove(cards_to_remove)
+
+		elif isinstance(cards_to_remove, Counter):
+			for card, count in cards_to_remove.items():
+				remove(card, count)
+		else:
 			# This would also get triggered by case in remove_one, but this way we'll give a better error message
-			if len(cards_to_remove) > self.num_unseen_dealt_cards:
+			if previously_unseen and len(cards_to_remove) > self.num_unseen_dealt_cards:
 				raise AssertionError("Trying to remove %i cards from deck dist when only %i unseen cards left"
 					% (len(cards_to_remove), self.num_unseen_dealt_cards))
 
 			for card_to_remove in cards_to_remove:
 				# Not going with recursive here will break using this on lists of lists,
 				# but you probably shouldn't be using it that way anyway
-				remove_one(card_to_remove)
-		else:
-			remove_one(cards_to_remove)
+				remove(card_to_remove)
 
 	def get_num_players(self):
 		assert self.other_player_states, "Cannot call get_num_players before initializing player state"
 		return 1 + len(self.other_player_states)
-
-	# Returns copy with all the same public info - but hand is secret
-	def get_public_copy(self):
-		self_copy = copy.copy(self)
-		assert self_copy.plate is self.plate
-		self_copy.hand = None
-		return self_copy
 
 	def play_card(self, card: Card):
 		self._play_card(card)
@@ -118,53 +149,60 @@ class PlayerState:
 		self.hand.remove(card)
 
 		# Have to still add to plate
+		# TODO: don't put puddings on plate
 		self.plate.append(card)
 
 		if card == Card.Pudding:
-			self.num_pudding += 1
+			self.public_state.num_pudding += 1
 
-	def end_round(self, round_score):
-		self.total_score += round_score
-		self.plate = []
-		self.play_history = []
+	def end_round(self, round_score: int):
+		self.public_state.total_score += round_score
+		self.plate.clear()
+		self.play_history.clear()
 
-	def update_other_player_state_before_pass(self, verbose=False):
+	def score_puddings(self, pudding_score: int):
+		self.public_state.total_score += pudding_score
+
+	def update_other_player_state_before_pass(self, players: dict[str, PublicPlayerState], verbose=False):
 
 		assert self.other_player_states, "Cannot call update_other_player_state_before_pass before initializing player state"
 
 		# DEBUG
+		# TODO: use logging library for this
 		if True and verbose:
 			print('%s state before update:' % self.name)
 			print(repr(self))
 			print()
 
-		# Remove last played card from knowledge of hands
+		# Update plate, play history, and knowledge of hands & deck distribution
 
 		for state in self.other_player_states:
-			last_played_card = state.play_history[-1]
+			new_state = players[state.name]
 
-			chopstick_extra_card = None
-			if isinstance(last_played_card, tuple):
-				assert len(last_played_card) == 2
-				last_played_card, chopstick_extra_card = last_played_card
+			state.plate = deepcopy(new_state.plate)
+			state.play_history = deepcopy(new_state.play_history)
 
-			assert isinstance(last_played_card, Card)
-			assert (chopstick_extra_card is None) or isinstance(chopstick_extra_card, Card)
+			last_play = state.play_history[-1]
 
-			# TODO: if player with unknown hand used chopsticks, now we know chopsticks are in this hand
-			# However, right now the logic here assumes we know either all or none of a hand; this would break that assumption
-
-			if state.hand:
-				if last_played_card not in state.hand:
-					raise AssertionError(f'Card not in hand: {last_played_card=}, {state.hand=}')
-				state.hand.remove(last_played_card)
-				if chopstick_extra_card is not None:
-					if chopstick_extra_card not in state.hand:
-						raise AssertionError(f'Card not in hand: {chopstick_extra_card=}, {state.hand=}')
-					state.hand.remove(chopstick_extra_card)
-					state.hand.append(Card.Chopsticks)
+			assert state.hand
+			if isinstance(last_play, Card):
+				used_chopsticks = False
+				cards = [last_play]
 			else:
-				self.update_deck_dist(last_played_card)
+				used_chopsticks = True
+				cards = last_play
+
+			for card in cards:
+				if card in state.hand:
+					state.hand.remove(card)
+				elif Card.Unknown in state.hand:
+					self.update_deck_dist(card)
+					state.hand.remove(Card.Unknown)
+				else:
+					raise AssertionError(f'Player {state.name} played card not in hand: {last_play=}, hand={card_names(state.hand)}')
+
+			if used_chopsticks:
+				state.hand.append(Card.Chopsticks)
 
 		# DEBUG
 		if True and verbose:
@@ -172,21 +210,41 @@ class PlayerState:
 			print(repr(self))
 			print()
 
-		# Shift hands
+		assert self.passing_hand is None
+		self.passing_hand = copy(self.hand)
 
-		for n in reversed(range(len(self.other_player_states)-1)):
-			self.other_player_states[n+1].hand = self.other_player_states[n].hand
-		self.other_player_states[0].hand = copy.deepcopy(self.hand)
+	def update_other_player_state_after_pass(self, verbose=False):
+
+		assert self.passing_hand is not None
+
+		passed_hand = self.other_player_states[-1].hand
+
+		num_other_players = len(self.other_player_states)
+		for idx in reversed(range(num_other_players-1)):
+			self.other_player_states[idx + 1].hand = self.other_player_states[idx].hand
+		self.other_player_states[0].hand = self.passing_hand
+
+		self.passing_hand = None
 
 		if verbose:
-			print('%s state: (own hand will be previous)' % self.name)
+			print('%s state:' % self.name)
 			print(repr(self))
 			print()
 
-	def update_other_player_state_after_pass(self, verbose=False):
-		# If there are still unseen cards, then this must be a new hand
-		if self.num_unseen_dealt_cards > 0:
-			self.update_deck_dist(self.hand)
+		# Compare passed_hand with self.hand
+		# These should be the same, except for cards that were previously unknown
+		assert len(passed_hand) == len(self.hand)
+		assert Card.Unknown not in self.hand
+		hand_before_seeing = Counter(passed_hand)
+		hand_after_seeing = Counter(self.hand)
+
+		if Card.Unknown in hand_before_seeing:
+			hand_before_seeing.pop(Card.Unknown)
+			newly_seen_cards = hand_after_seeing - hand_before_seeing
+			assert Card.Unknown not in newly_seen_cards
+			self.update_deck_dist(newly_seen_cards)
+		elif hand_before_seeing != hand_after_seeing:
+			raise AssertionError(f"Received hand that doesn't match expected (expected: {card_names(passed_hand)}, received: {card_names(self.hand)})")
 
 		if verbose:
 			print('%s state:' % self.name)
@@ -214,10 +272,11 @@ class PlayerState:
 		if self.other_player_states:
 			s += '  other_player_states=[\n'
 			for state in (self.other_player_states if self.other_player_states is not None else []):
+				assert state is not None
 				s += "    %s: plate %s, hand %s, pudding %i, score %i,\n" % (
 					state.name,
 					card_names(state.plate, sort=False),
-					card_names(state.hand, sort=False),
+					None if state.hand is None else card_names(state.hand, sort=False),
 					state.num_pudding,
 					state.total_score)
 			s += '  ],\n'
@@ -231,44 +290,97 @@ class PlayerState:
 
 		return s
 
+	def dump(self) -> str:
+		"""like __repr__ but formatted a bit more human-friendly"""
 
-def init_other_player_states(players, forward=True, omniscient=False, verbose=True):
+		s = ''
 
-	players_list = players if forward else list(reversed(players))
+		s += f'PlayerState for {self.name}:\n'
+		s += '\n'
+
+		public_states = [self.public_state] + self.other_player_states
+
+		sep = ' | '
+		eol = ' |\n'
+
+		s += f'{"Name:":<10}' + sep + sep.join([f'{s.name:^20}' for s in public_states]) + eol
+		s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score:>20}' for s in public_states]) + eol
+		s += f'{"Pudding:":<10}' + sep + sep.join([f'{s.num_pudding:>20}' for s in public_states]) + eol
+
+		# Plates may have different length due to puddings
+		max_plate_len = max(len(s.plate) for s in public_states)
+
+		if max_plate_len:
+			s += 'Plate:\n'
+			for idx in range(max_plate_len):
+				s += f'{"":10}' + sep + sep.join([
+					f'{s.plate[idx]:20}' if idx <= len(s.plate) else ' ' * 20
+					for s in public_states
+				]) + eol
+		else:
+			s += 'Plate: [all empty]\n'
+
+		# TODO: show current plate score
+
+		# TODO: show play history?
+
+		num_cards_in_hand = len(self.hand)
+		if num_cards_in_hand:
+			hands = [self.hand] + [s.hand for s in self.other_player_states]
+			assert all(len(h) == num_cards_in_hand for h in hands)
+			s += 'Hand:\n'
+			for idx in range(num_cards_in_hand):
+				s += f'{"":10}' + sep + sep.join([f'{h[idx]:20}' for h in hands]) + eol
+		else:
+			s += 'Hand: [all empty]\n'
+
+		s += '\n'
+		s += f'Num unseen dealt cards: {self.num_unseen_dealt_cards}\n'
+		s += f'Unseen: {dict_card_names(self.deck_dist)}\n'
+
+		return s
+
+
+def init_other_player_states_after_dealing_hands(players: Sequence[PlayerState], round_pass_forward=True, verbose=True):
+
+	players_list = players if round_pass_forward else list(reversed(players))
+
+	assert all(p.hand for p in players), "Must assign hands before calling init_other_player_states_after_dealing_hands"
+
+	hand_num_cards = len(players[0].hand)
+	assert all(len(p.hand) == hand_num_cards for p in players), "All player hands must be the same size!"
+
+	assert all(p.num_unseen_dealt_cards == 0 for p in players), "num_unseen_dealt_cards nonzero at start"
 
 	num_players = len(players)
-	for n, player in enumerate(players_list):
-
-		if not player.hand:
-			raise AssertionError("Must assign hands before calling init_other_player_states")
-
-		if player.num_unseen_dealt_cards:
-			raise AssertionError("num_unseen_dealt_cards nonzero at start")
-
-		player.num_unseen_dealt_cards = len(player.hand)
-		player.update_deck_dist(player.hand)
-		assert player.num_unseen_dealt_cards == 0
+	for this_player_idx, player in enumerate(players_list):
 
 		player.other_player_states = []
-		for m in range(num_players-1):
+
+		for other_player_rel_idx in range(num_players-1):
 			# Start with player after the current one
-			idx = (n + m + 1) % num_players
-			state = players_list[idx].get_public_copy()
+			other_player_true_idx = (this_player_idx + other_player_rel_idx + 1) % num_players
+			other_player = players_list[other_player_true_idx]
+			player.other_player_states.append(deepcopy(other_player.public_state))
 
-			player.num_unseen_dealt_cards += len(players_list[idx].hand)
-			if omniscient:
-				state.hand = copy.deepcopy(players_list[idx].hand)
-				player.update_deck_dist(state.hand)
+		assert len(player.other_player_states) == num_players - 1
 
-			player.other_player_states.append(state)
+		assert player.num_unseen_dealt_cards == 0
+		player.update_deck_dist(player.hand, previously_unseen=False)
+		assert player.num_unseen_dealt_cards == 0
 
-		if omniscient:
-			assert player.num_unseen_dealt_cards == 0
-		elif verbose:
+		for player_public_state in player.other_player_states:
+			if player_public_state.hand is not None:
+				player.update_deck_dist(player_public_state.hand, previously_unseen=False)
+			else:
+				player_public_state.hand = [Card.Unknown] * hand_num_cards
+				player.num_unseen_dealt_cards += hand_num_cards
+
+		if verbose and player.num_unseen_dealt_cards:
 			print("%s, %i unseen cards" % (player.name, player.num_unseen_dealt_cards))
 
 
-def pass_hands(players, forward=True):
+def pass_hands(players: Sequence[PlayerState], forward=True):
 	last_player_idx = len(players) - 1
 	if forward:
 		swap_hand = players[last_player_idx].hand

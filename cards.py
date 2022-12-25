@@ -7,6 +7,9 @@ from typing import Any, Dict, Iterable, List, Union, Tuple, Optional
 
 @unique
 class Card(Enum):
+
+	Unknown = '?'
+
 	Tempura = 'Tempura'
 	Sashimi = 'Sashimi'
 	Dumpling = 'Dumpling'
@@ -54,6 +57,8 @@ def card_sort_order(card):
 		Card.Maki1: 10,
 		Card.Pudding: 11,
 		Card.Chopsticks: 12,
+
+		Card.Unknown: 99,
 	}[card]
 
 
