@@ -558,9 +558,18 @@ Doesn't look at other players' hands/plates, or what other cards are still out t
 Minimal regard for opportunity cost of future moves
 """
 class TunnelVisionAi(AI):
-	def __init__(self, blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE, opportunity_cost_scale=1.0):
+	def __init__(
+			self,
+			blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE,
+			opportunity_cost_scale: float = 1.0,
+			chopstick_opportunity_cost: bool = True,
+			always_take_chopsticks: bool = False,
+			):
 		self.blocking_point_scale = blocking_point_scale
 		self.opportunity_cost_scale = opportunity_cost_scale
+
+		self.always_take_chopsticks = always_take_chopsticks
+		self.chopstick_opportunity_cost = chopstick_opportunity_cost
 
 	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
 		n_cards = len(hand)
@@ -595,7 +604,7 @@ class TunnelVisionAi(AI):
 				num_chopsticks=num_chopsticks,
 				num_cards_on_plate=len(plate),
 				num_cards_in_hand=n_cards,
-			)
+			) if self.chopstick_opportunity_cost else 0
 
 			chopstick_pairs = meaningful_chopstick_pairs(hand=hand, num_unused_wasabi=num_unused_wasabi)
 			for chopstick_pair in chopstick_pairs:
@@ -624,6 +633,15 @@ class TunnelVisionAi(AI):
 			print('Possible picks:')
 			for card, points in print_list:
 				print(f'\t{str(card) + ":":16s} {points}')
+
+		if self.always_take_chopsticks and Card.Chopsticks in hand:
+			if verbose:
+				print('"Always take chopsticks" is set, so removing non chopstick choices')
+			cards_points = {
+				card: points for card, points in cards_points.items()
+				if (isinstance(card, Card) and card == Card.Chopsticks) or (isinstance(card, Tuple) and Card.Chopsticks in card)
+			}
+			assert cards_points
 
 		# Take highest point value option (if tied, take random from tied)
 
