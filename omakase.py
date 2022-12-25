@@ -10,15 +10,15 @@ from typing import List, Optional
 
 from tqdm import tqdm, trange
 
-from ai import RandomAI, RandomPlusAI
-from tunnel_vision_ai import TunnelVisionAi
+from random_ai import RandomAI, RandomPlusAI
+from tunnel_vision_ai import TunnelVisionAI
 
 from cards import Card
 from deck import Deck, get_deck_distribution
 from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game
 from player import get_player_name
-from utils import random_order_and_inverse
+from utils import add_numbers_to_duplicate_names, random_order_and_inverse
 
 
 def _bool_arg(val) -> bool:
@@ -35,7 +35,7 @@ class PlayerGameStats:
 	elo_history: Optional[List[int]] = None
 
 
-def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=False, random_seed=None, **game_kwargs):
+def play_game(*, num_players, players, player_names, verbose, randomize_player_order=False, random_seed=None, **game_kwargs):
 
 	random.seed(random_seed)
 
@@ -43,7 +43,7 @@ def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=
 	if randomize_player_order:
 		player_order, inverse_player_order = random_order_and_inverse(num_players)
 		player_names = [player_names[idx] for idx in player_order]
-		ai = [ai[idx] for idx in player_order]
+		players = [players[idx] for idx in player_order]
 
 		if verbose:
 			print('Randomized player order:')
@@ -54,7 +54,7 @@ def play_game(*, num_players, player_names, ai, verbose, randomize_player_order=
 	# TODO: once there are stateful AI, will need to create new ones each game
 	game = Game(
 		player_names=player_names,
-		ai=ai,
+		players=players,
 		num_players=num_players,
 		verbose=verbose,
 		**game_kwargs)
@@ -107,22 +107,24 @@ def main():
 	if not args.chopsticks:
 		deck_dist[Card.Chopsticks] = 0
 
-	ai = [TunnelVisionAi(), RandomPlusAI()]
-	player_names = ['TunnelVisionAi', 'RandomPlusAI']
+	players = [TunnelVisionAI(), RandomPlusAI()]
+	# player_names = ['TunnelVisionAI', 'RandomPlusAI']
 
-	num_random_ai = args.players - len(ai)
-	ai.extend([RandomAI() for _ in range(num_random_ai)])
-	if num_random_ai == 1:
-		player_names.append('RandomAI')
-	else:
-		player_names.extend([f'RandomAI {1+idx}' for idx in range(num_random_ai)])
+	num_random_ai = args.players - len(players)
+	players.extend([RandomAI() for _ in range(num_random_ai)])
+	# if num_random_ai == 1:
+	# 	player_names.append('RandomAI')
+	# else:
+	# 	player_names.extend([f'RandomAI {1+idx}' for idx in range(num_random_ai)])
+
+	player_names = add_numbers_to_duplicate_names([player.get_name() for player in players])
 
 	play_game_kwargs = dict(
 		num_players=args.players,
 		deck_dist=deck_dist,
 		omniscient=args.omniscient,
 		player_names=player_names,
-		ai=ai,
+		players=players,
 		verbose=(args.num_games == 1),
 		randomize_player_order=args.randomize_order,
 		pause_after_turn=args.pause_after_turn,

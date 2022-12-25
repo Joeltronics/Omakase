@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 
-from copy import copy, deepcopy
+from collections import Counter
 from collections.abc import Sequence
+from copy import copy, deepcopy
 from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Sequence, Union
 
-from ai import AI
 from cards import Card, card_names
 from deck import Deck, get_deck_distribution
-from player import PlayerState, init_other_player_states_after_dealing_hands, pass_hands
-from tunnel_vision_ai import TunnelVisionAi
+from player import PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
+from tunnel_vision_ai import TunnelVisionAI
 import scoring
+from utils import add_numbers_to_duplicate_names
 
 
 @dataclass(frozen=True)
@@ -41,8 +42,8 @@ class Game:
 			deck_dist=None,
 			num_cards_per_player=None,
 			omniscient=False,
+			players: Optional[Iterable[PlayerInterface]] = None,
 			player_names: Optional[Iterable[str]] = None,
-			ai: Optional[Iterable[AI]] = None,
 			verbose: bool = False,
 			pause_after_turn: bool = False,
 			):
@@ -62,26 +63,27 @@ class Game:
 
 		self._deck = Deck(deck_dist)
 
+		if players is None:
+			self._print('Creating default AI')
+			self._players = [TunnelVisionAI() for _ in range(num_players)]
+		elif isinstance(players, Sequence):
+			if len(players) != num_players:
+				raise ValueError('Number of AI must match number of players')
+			self._players = players
+
 		if player_names is None:
-			player_names = [None] * num_players
+			player_names = [p.get_name() for p in self._players]
 		elif len(player_names) != num_players:
 			raise ValueError('Number of player names must match number of players')
-		elif len(player_names) != len(set(player_names)):
-			raise ValueError('Player names must be unique!')
+
+		player_names = add_numbers_to_duplicate_names(player_names)
+		assert len(player_names) == len(set(player_names))
 
 		self._print('Creating players')
 		self._player_states = [PlayerState(deck_dist, name=name, show_hand=omniscient) for name in player_names]
 		self._public_states_dict = {p.name: p.public_state for p in self._player_states}
 
 		assert len(self._player_states) == len(set([p.name for p in self._player_states])), "Player names should be guaranteed unique at this point"
-
-		if ai is None:
-			self._print('Creating default AI')
-			self._ai = [TunnelVisionAi() for _ in range(num_players)]
-		elif isinstance(ai, Sequence):
-			if len(ai) != num_players:
-				raise ValueError('Number of AI must match number of players')
-			self._ai = ai
 
 	def _print(self, *args, **kwargs):
 		if self.verbose:
@@ -149,29 +151,31 @@ class Game:
 
 	def _play_turn(self, pass_forward: bool):
 
-		for n, (player, ai) in enumerate(zip(self._player_states, self._ai)):
+		for n, (state, player) in enumerate(zip(self._player_states, self._players)):
 
 			verbose = self.verbose and (n == 0)
 
-			self._print(player.name)
-			pudding_str = (" (%i pudding)" % player.num_pudding) if player.num_pudding else ""
-			self._print("Plate: %s%s" % (card_names(player.plate, sort=True), pudding_str))
-			self._print("Hand: %s" % card_names(player.hand))
+			self._print(state.name)
+			pudding_str = (" (%i pudding)" % state.num_pudding) if state.num_pudding else ""
+			self._print("Plate: %s%s" % (card_names(state.plate, sort=True), pudding_str))
+			self._print("Hand: %s" % card_names(state.hand))
 
 			if verbose:
 				self._print("State:")
-				self._print(player.dump())
+				self._print(state.dump())
 
-			card_or_pair = ai.play_turn(deepcopy(player), copy(player.hand), verbose=verbose)
+			# TODO: dump full state if this or play_card/play_chopsticks throws an exception
+			card_or_pair = player.play_turn(deepcopy(state), copy(state.hand), verbose=verbose)
 
 			if isinstance(card_or_pair, Card):
-				player.play_card(card_or_pair)
+				state.play_card(card_or_pair)
 				self._print(f"Plays: {card_or_pair}")
 			elif isinstance(card_or_pair, tuple) and len(card_or_pair) == 2:
-				player.play_chopsticks(*card_or_pair)
+				state.play_chopsticks(*card_or_pair)
 				self._print(f"Plays chopsticks: {card_or_pair[0]} + {card_or_pair[1]}")
 			else:
 				raise ValueError(f'AI played invalid: {card_or_pair!r}')
+
 			self._print()
 
 		debug_update_player_state_verbose = False

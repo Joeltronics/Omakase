@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import Counter
 from collections.abc import Collection, Iterable, Sequence
 import itertools
 import random
@@ -86,6 +87,27 @@ def meaningful_chopstick_pairs(hand: Collection[Card], num_unused_wasabi: int) -
 		choices.add((Card.Chopsticks, Card.Chopsticks))
 
 	return choices | swapped_choices
+
+
+def add_numbers_to_duplicate_names(player_names: Sequence[str]) -> List[str]:
+	player_names_count = Counter(player_names)
+	name_numbers = {name: 1 for name, count in player_names_count.items() if count > 1}
+
+	ret = []
+	for name in player_names:
+		if name in name_numbers:
+			ret.append(f'{name} {name_numbers[name]}')
+			name_numbers[name] += 1
+		else:
+			ret.append(name)
+
+	# Could run into problems if passed in a name already ending with a number
+	# e.g.: ["Player", "Player", "Player 1"] would end up with duplicate: ["Player 1", "Player 2", "Player 1"]
+	# TODO: handle this case
+	if len(ret) != len(set(ret)):
+		raise ValueError(f'Invalid player names: {player_names}')
+
+	return ret
 
 
 def _test():

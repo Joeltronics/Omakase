@@ -392,3 +392,19 @@ def pass_hands(players: Sequence[PlayerState], forward=True):
 		for n in range(0, last_player_idx, 1):
 			players[n].hand = players[n + 1].hand
 		players[last_player_idx].hand = swap_hand
+	
+
+class PlayerInterface:
+	def get_name(self) -> str:
+		raise NotImplementedError('To be implemented by the child class!')
+
+	def play_turn(
+			self,
+			player_state: PlayerState,
+			hand: Collection[Card],
+			verbose=False,
+			) -> Union[Card, Tuple[Card, Card]]:
+		"""
+		:returns: card to play, or 2 cards if playing chopsticks (must have chopsticks on plate)
+		"""
+		raise NotImplementedError('To be implemented by the child class!')

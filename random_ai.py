@@ -6,25 +6,16 @@ from enum import IntEnum, unique
 import random
 from typing import Union, Tuple
 
-from player import PlayerState
+from player import PlayerInterface, PlayerState
 from cards import Card, card_names
 from utils import *
 
 
-class AI:
-	def play_turn(
-			self,
-			player_state: PlayerState,
-			hand: Collection[Card],
-			verbose=False,
-			) -> Union[Card, Tuple[Card, Card]]:
-		"""
-		:returns: card to play, or 2 cards if playing chopsticks (must have chopsticks on plate)
-		"""
-		raise NotImplementedError('To be implemented by the child class!')
+class RandomAI(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "RandomAI"
 
-
-class RandomAI(AI):
 	@staticmethod
 	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
 		assert len(hand) > 0
@@ -159,7 +150,11 @@ A very simple AI that's mostly random, but makes a few obvious choices (when pos
 		- Complete a set if possible
 		- If we have an unused wasabi, take a squid
 """
-class RandomPlusAI(AI):
+class RandomPlusAI(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "RandomPlusAI"
+
 	def __init__(self, take_obvious_picks=True):
 		self.take_obvious_picks = take_obvious_picks
 

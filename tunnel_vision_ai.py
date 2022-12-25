@@ -4,8 +4,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
-from ai import AI
-from player import PlayerState
+from player import PlayerInterface, PlayerState
 from cards import Card, card_names
 from utils import *
 import random
@@ -557,7 +556,11 @@ Only looks at what's on current plate and how many cards are left
 Doesn't look at other players' hands/plates, or what other cards are still out there
 Minimal regard for opportunity cost of future moves
 """
-class TunnelVisionAi(AI):
+class TunnelVisionAI(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "TunnelVisionAI"
+
 	def __init__(
 			self,
 			blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE,
