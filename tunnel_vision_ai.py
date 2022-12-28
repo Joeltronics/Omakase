@@ -2,6 +2,7 @@
 
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass
+from numbers import Real
 from typing import Optional, Tuple, Union
 
 from player import PlayerInterface, PlayerState
@@ -32,11 +33,11 @@ DEFAULT_BLOCKING_POINT_SCALE = 0.25
 class CardPointsBreakdown:
 
 	points_now: int = 0
-	avg_future_points: Union[float, int] = 0
+	avg_future_points: Real = 0
 
-	rel_points_blocking_per_player: Union[float, int] = 0
-	# avg_rel_points_blocking: Union[float, int] = 0
-	avg_opportunity_cost: Union[float, int] = 0
+	rel_points_blocking_per_player: Real = 0
+	# avg_rel_points_blocking: Real = 0
+	avg_opportunity_cost: Real = 0
 
 	num_other_players: Optional[int] = None
 
@@ -44,7 +45,7 @@ class CardPointsBreakdown:
 	opportunity_cost_scale: Optional[float] = None
 
 	@property
-	def avg_points_me(self) -> Union[int, float]:
+	def avg_points_me(self) -> Real:
 		return self.points_now + self.avg_future_points
 
 	@property
@@ -219,7 +220,7 @@ def _nigiri_opportunity_cost(
 		num_unused_wasabi: Optional[int],
 		num_cards_on_plate: int,
 		num_cards_in_hand: int,
-		) -> Union[int, float]:
+		) -> Real:
 
 	# If this is a squid, then we can't possibly do better; no opportunity cost
 	if card not in [Card.EggNigiri, Card.SalmonNigiri]:
@@ -386,7 +387,7 @@ def _chopsticks_avg_points(num_chopsticks: Optional[int], num_cards_on_plate: in
 	return CardPointsBreakdown(avg_future_points=points)
 
 
-def _using_chopsticks_opportunity_cost(num_chopsticks: int, num_cards_on_plate: int, num_cards_in_hand: int) -> Union[int, float]:
+def _using_chopsticks_opportunity_cost(num_chopsticks: int, num_cards_on_plate: int, num_cards_in_hand: int) -> Real:
 
 	# TODO: should wrap _chopsticks_avg_points()
 
@@ -510,7 +511,7 @@ def _pair_avg_points(
 		num_unused_wasabi: int,
 		num_chopsticks: int,
 		blocking_point_scale: float,
-		# ) -> Union[int, float]:
+		# ) -> Real:
 		) -> CardPointsBreakdown:
 
 	assert num_cards >= 2
