@@ -6,7 +6,7 @@ import itertools
 import random
 from typing import Tuple, List, Set
 
-from cards import Card
+from cards import Card, Pick
 
 
 FLOAT_EPSILON = 1e-6
@@ -48,7 +48,7 @@ def random_order_and_inverse(num_players) -> Tuple[List[int], List[int]]:
 	return order, inverse_order
 
 
-def meaningful_chopstick_pairs(hand: Collection[Card], num_unused_wasabi: int) -> Set[Tuple[Card, Card]]:
+def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int) -> Set[Pick]:
 
 	# TODO: Add an option to eliminate obvious picks (no point taking a lower-value nigiri or maki if a higher-value is available)
 	# Make sure it's optional though - there could be very rare cases where it's advantageous to take a lower value
@@ -61,13 +61,13 @@ def meaningful_chopstick_pairs(hand: Collection[Card], num_unused_wasabi: int) -
 	if len(card_options) < 2:
 		if num_chopsticks_in_hand >= 2:
 			# Extremely rare case - but it's technically meaningful so we should still return it
-			return {(Card.Chopsticks, Card.Chopsticks)}
+			return {Pick(Card.Chopsticks, Card.Chopsticks)}
 		return set()
 
 	# Order only matters when nigiri + wasabi is involved (either a wasabi from before, or a new one)
 	# So take all combinations (not permuations), then manually add swapped-order pairs that matter after
 
-	choices = set(itertools.combinations(card_options, 2))
+	choices = {Pick(*choice) for choice in itertools.combinations(card_options, 2)}
 
 	swapped_choices = set()
 	if num_unused_wasabi <= 1:
@@ -77,16 +77,17 @@ def meaningful_chopstick_pairs(hand: Collection[Card], num_unused_wasabi: int) -
 			if num_unused_wasabi == 1:
 				# If there's already 1 unused wasabi, then the order of 2 different nigiri matters
 				if card_a.is_nigiri() and card_b.is_nigiri() and card_a != card_b:
-					swapped_choices.add((card_b, card_a))
+					swapped_choices.add(Pick(card_b, card_a))
 			elif not num_unused_wasabi:
 				# If no wasabi, then the order we play wasabi & nigiri matters
 				if (card_a == Card.Wasabi and card_b.is_nigiri()) or (card_a.is_nigiri() and card_b == Card.Wasabi):
-					swapped_choices.add((card_b, card_a))
+					swapped_choices.add(Pick(card_b, card_a))
+	choices |= swapped_choices
 
 	if num_chopsticks_in_hand >= 2:
-		choices.add((Card.Chopsticks, Card.Chopsticks))
+		choices.add(Pick(Card.Chopsticks, Card.Chopsticks))
 
-	return choices | swapped_choices
+	return choices
 
 
 def add_numbers_to_duplicate_names(player_names: Sequence[str]) -> List[str]:

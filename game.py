@@ -6,7 +6,7 @@ from copy import copy, deepcopy
 from dataclasses import dataclass
 from typing import Callable, Iterable, List, Optional, Sequence, Union
 
-from cards import Card, card_names
+from cards import Card, Pick, card_names
 from deck import Deck, get_deck_distribution
 from player import PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
 from tunnel_vision_ai import TunnelVisionAI
@@ -165,16 +165,13 @@ class Game:
 				self._print(state.dump())
 
 			# TODO: dump full state if this or play_card/play_chopsticks throws an exception
-			card_or_pair = player.play_turn(deepcopy(state), copy(state.hand), verbose=verbose)
+			pick = player.play_turn(deepcopy(state), copy(state.hand), verbose=verbose)
 
-			if isinstance(card_or_pair, Card):
-				state.play_card(card_or_pair)
-				self._print(f"Plays: {card_or_pair}")
-			elif isinstance(card_or_pair, tuple) and len(card_or_pair) == 2:
-				state.play_chopsticks(*card_or_pair)
-				self._print(f"Plays chopsticks: {card_or_pair[0]} + {card_or_pair[1]}")
-			else:
-				raise ValueError(f'AI played invalid: {card_or_pair!r}')
+			if not isinstance(pick, Pick):
+				raise ValueError(f'AI played invalid: {pick!r}')
+
+			state.play_turn(pick)
+			self._print(f"Plays: {pick}")
 
 			self._print()
 

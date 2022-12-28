@@ -7,7 +7,7 @@ import random
 from typing import Union, Tuple
 
 from player import PlayerInterface, PlayerState
-from cards import Card, card_names
+from cards import Card, Pick, card_names
 from utils import *
 
 
@@ -17,7 +17,7 @@ class RandomAI(PlayerInterface):
 		return "RandomAI"
 
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
+	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
 		assert len(hand) > 0
 
 		can_use_chopsticks = Card.Chopsticks in player_state.plate and len(hand) >= 2
@@ -26,9 +26,9 @@ class RandomAI(PlayerInterface):
 		if use_chopsticks:
 			ret = random.sample(hand, 2)
 			assert len(ret) == 2
-			return ret[0], ret[1]
+			return Pick(ret[0], ret[1])
 		else:
-			return random.choice(hand)
+			return Pick(random.choice(hand))
 
 
 @unique
@@ -158,10 +158,10 @@ class RandomPlusAI(PlayerInterface):
 	def __init__(self, take_obvious_picks=True):
 		self.take_obvious_picks = take_obvious_picks
 
-	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
+	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
 
 		if len(hand) == 1:
-			return hand[0]
+			return Pick(hand[0])
 
 		plate = player_state.plate
 
@@ -175,13 +175,13 @@ class RandomPlusAI(PlayerInterface):
 			hand_count = Counter(hand)
 
 			if Card.Sashimi in hand_count and hand_count[Card.Sashimi] >= 2 and get_num_sashimi_needed(plate) == 2:
-				return (Card.Sashimi, Card.Sashimi)  # 10 points
+				return Pick(Card.Sashimi, Card.Sashimi)  # 10 points
 
 			if Card.Wasabi in hand and Card.SquidNigiri in hand and not get_num_unused_wasabi(plate):
-				return (Card.Wasabi, Card.SquidNigiri)  # 9 points
+				return Pick(Card.Wasabi, Card.SquidNigiri)  # 9 points
 
 			if Card.Dumpling in hand_count and hand_count[Card.Dumpling] >= 2 and count_card(plate, Card.Dumpling) == 3:
-				return (Card.Dumpling, Card.Dumpling)  # 9 points
+				return Pick(Card.Dumpling, Card.Dumpling)  # 9 points
 			
 			# TOOD: wasabi-salmon? 2 tempura? 2 sashimi when num_sashimi_needed == 3?
 
@@ -196,7 +196,7 @@ class RandomPlusAI(PlayerInterface):
 
 		# TODO: this blocks rare case of using chopsticks to take 2 chopsticks
 		if (card1 == Card.Chopsticks):
-			return card1
+			return Pick(card1)
 
 		if can_use_chopsticks:
 
@@ -211,18 +211,18 @@ class RandomPlusAI(PlayerInterface):
 				plate=plate_after, hand=hand_after, verbose=verbose, take_obvious_picks=self.take_obvious_picks)
 
 			if card2 == Card.Chopsticks:
-				return card1
+				return Pick(card1)
 
 			elif card2_state == _RandomPickState.great:
-				return (card1, card2)
+				return Pick(card1, card2)
 			
 			elif card2_state == _RandomPickState.fine and (should_use_chopsticks or random_bool()):
-				return (card1, card2)
+				return Pick(card1, card2)
 
 			elif card2_state == _RandomPickState.useless_to_me and should_use_chopsticks:
-				return (card1, card2)
+				return Pick(card1, card2)
 
-		return card1
+		return Pick(card1)
 
 
 """

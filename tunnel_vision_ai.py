@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 
 from player import PlayerInterface, PlayerState
-from cards import Card, card_names
+from cards import Card, Pick, card_names
 from utils import *
 import random
 
@@ -574,12 +574,12 @@ class TunnelVisionAI(PlayerInterface):
 		self.always_take_chopsticks = always_take_chopsticks
 		self.chopstick_opportunity_cost = chopstick_opportunity_cost
 
-	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Union[Card, Tuple[Card, Card]]:
+	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
 		n_cards = len(hand)
 		assert n_cards > 0
 
 		if n_cards == 1:
-			return hand[0]
+			return Pick(hand[0])
 
 		plate = player_state.plate
 		num_players = player_state.get_num_players()
@@ -591,7 +591,7 @@ class TunnelVisionAI(PlayerInterface):
 
 		# TODO: could make this slightly more efficient by eliminating some obvious picks (don't take lower nigiri or Maki)
 		cards_points = {
-			card: _avg_points(
+			Pick(card): _avg_points(
 				card,
 				plate=plate,
 				num_cards=len(hand),
@@ -609,10 +609,10 @@ class TunnelVisionAI(PlayerInterface):
 				num_cards_in_hand=n_cards,
 			) if self.chopstick_opportunity_cost else 0
 
-			chopstick_pairs = meaningful_chopstick_pairs(hand=hand, num_unused_wasabi=num_unused_wasabi)
-			for chopstick_pair in chopstick_pairs:
+			chopstick_picks = get_chopstick_picks(hand=hand, num_unused_wasabi=num_unused_wasabi)
+			for chopstick_pick in chopstick_picks:
 				points = _pair_avg_points(
-						chopstick_pair,
+						chopstick_pick.as_pair(),
 						plate=plate,
 						num_cards=len(hand),
 						num_players=num_players,
@@ -621,7 +621,7 @@ class TunnelVisionAI(PlayerInterface):
 						blocking_point_scale=self.blocking_point_scale,
 				)
 				points = points + CardPointsBreakdown(avg_opportunity_cost=chopstick_opportunity_cost)
-				cards_points[chopstick_pair] = points
+				cards_points[chopstick_pick] = points
 
 		# Add number of players & scale values
 

@@ -8,7 +8,7 @@ import random
 from typing import Optional, List, Iterable, Union
 
 from utils import *
-from cards import Card, sort_cards, card_names, dict_card_names
+from cards import Card, Pick, sort_cards, card_names, dict_card_names
 
 use_named_players = False
 
@@ -38,7 +38,7 @@ def get_player_name() -> str:
 class PublicPlayerState:
 	name: str
 	plate: list[Card] = field(default_factory=list)
-	play_history: list[Card] = field(default_factory=list)  # History of cards played this round (would be identical to self.plate without chopsticks/pudding)
+	play_history: list[Pick] = field(default_factory=list)  # History of cards played this round (would be identical to self.plate without chopsticks/pudding)
 	total_score: int = 0
 	num_pudding: int = 0
 
@@ -123,11 +123,15 @@ class PlayerState:
 		assert self.other_player_states, "Cannot call get_num_players before initializing player state"
 		return 1 + len(self.other_player_states)
 
-	def play_card(self, card: Card):
-		self._play_card(card)
-		self.play_history.append(card)
+	def play_turn(self, pick: Pick):
+		if len(pick) == 2:
+			self._play_chopsticks(pick[0], pick[1])
+		else:
+			card = pick[0]
+			self._play_card(card)
+		self.play_history.append(pick)
 
-	def play_chopsticks(self, card1: Card, card2: Card):
+	def _play_chopsticks(self, card1: Card, card2: Card):
 
 		if len(self.hand) < 2:
 			raise ValueError('Cannot play chopsticks, only 1 card left in hand')
@@ -140,11 +144,13 @@ class PlayerState:
 		self._play_card(card1)
 		self._play_card(card2)
 		self.hand.append(Card.Chopsticks)
-		self.play_history.append((card1, card2))
 
 	def _play_card(self, card: Card):
+
+		assert isinstance(card, Card)
+
 		if card not in self.hand:
-			raise ValueError('Cannot play card %s, not in hand: %s' % (card, self.hand))
+			raise ValueError(f'Cannot play card {card}, not in hand: {self.hand}')
 
 		self.hand.remove(card)
 
@@ -185,14 +191,8 @@ class PlayerState:
 			last_play = state.play_history[-1]
 
 			assert state.hand
-			if isinstance(last_play, Card):
-				used_chopsticks = False
-				cards = [last_play]
-			else:
-				used_chopsticks = True
-				cards = last_play
 
-			for card in cards:
+			for card in last_play:
 				if card in state.hand:
 					state.hand.remove(card)
 				elif Card.Unknown in state.hand:
@@ -201,7 +201,7 @@ class PlayerState:
 				else:
 					raise AssertionError(f'Player {state.name} played card not in hand: {last_play=}, hand={card_names(state.hand)}')
 
-			if used_chopsticks:
+			if len(last_play) > 1:
 				state.hand.append(Card.Chopsticks)
 
 		# DEBUG
@@ -403,7 +403,7 @@ class PlayerInterface:
 			player_state: PlayerState,
 			hand: Collection[Card],
 			verbose=False,
-			) -> Union[Card, Tuple[Card, Card]]:
+			) -> Pick:
 		"""
 		:returns: card to play, or 2 cards if playing chopsticks (must have chopsticks on plate)
 		"""
