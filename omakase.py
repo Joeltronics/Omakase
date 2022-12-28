@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from tqdm import tqdm, trange
 
-from random_ai import RandomAI, RandomPlusAI
+from random_ai import RandomAI, RandomPlusAI, RandomPlusPlusAI
 from tunnel_vision_ai import TunnelVisionAI
 
 from cards import Card
@@ -107,15 +107,12 @@ def main():
 	if not args.chopsticks:
 		deck_dist[Card.Chopsticks] = 0
 
-	players = [TunnelVisionAI(), RandomPlusAI()]
-	# player_names = ['TunnelVisionAI', 'RandomPlusAI']
+	players = [TunnelVisionAI(), RandomPlusPlusAI()]
+	if args.players >= 3:
+		players.append(RandomPlusAI())
 
-	num_random_ai = args.players - len(players)
+	num_random_ai = max(0, args.players - len(players))
 	players.extend([RandomAI() for _ in range(num_random_ai)])
-	# if num_random_ai == 1:
-	# 	player_names.append('RandomAI')
-	# else:
-	# 	player_names.extend([f'RandomAI {1+idx}' for idx in range(num_random_ai)])
 
 	player_names = add_numbers_to_duplicate_names([player.get_name() for player in players])
 

@@ -136,6 +136,98 @@ def _random_plus_pick_card(
 		return random.choice(hand), _RandomPickState.useless_to_anyone
 
 
+def _random_plus_pick_cards(
+		player_state: PlayerState,
+		hand: Collection[Card],
+		take_obvious_picks: bool,
+		verbose=False,
+		) -> Pick:
+
+	if len(hand) == 1:
+		return Pick(hand[0])
+
+	plate = player_state.plate
+
+	num_chopsticks = count_card(plate, Card.Chopsticks)
+
+	can_use_chopsticks = num_chopsticks and len(hand) > 1
+	should_use_chopsticks = can_use_chopsticks and len(hand) == 1 + num_chopsticks
+
+	# First, handle certain obvious picks for pairs of cards, which the individual card picks would miss
+	if take_obvious_picks and can_use_chopsticks:
+		hand_count = Counter(hand)
+
+		if Card.Sashimi in hand_count and hand_count[Card.Sashimi] >= 2 and get_num_sashimi_needed(plate) == 2:
+			return Pick(Card.Sashimi, Card.Sashimi)  # 10 points
+
+		if Card.Wasabi in hand and Card.SquidNigiri in hand and not get_num_unused_wasabi(plate):
+			return Pick(Card.Wasabi, Card.SquidNigiri)  # 9 points
+
+		if Card.Dumpling in hand_count and hand_count[Card.Dumpling] >= 2 and count_card(plate, Card.Dumpling) == 3:
+			return Pick(Card.Dumpling, Card.Dumpling)  # 9 points
+		
+		# TOOD: wasabi-salmon? 2 tempura? 2 sashimi when num_sashimi_needed == 3?
+
+	# Pick first card
+
+	card1, _ = _random_plus_pick_card(
+		plate=plate, hand=hand, verbose=verbose, take_obvious_picks=take_obvious_picks)
+
+	# TODO: this blocks rare case of using chopsticks to take 2 chopsticks
+	if (card1 == Card.Chopsticks):
+		return Pick(card1)
+
+	if can_use_chopsticks:
+
+		# Pick possible 2nd card
+
+		plate_after = list(plate)
+		hand_after = list(hand)
+		plate_after.append(card1)
+		hand_after.remove(card1)
+
+		card2, card2_state = _random_plus_pick_card(
+			plate=plate_after, hand=hand_after, verbose=verbose, take_obvious_picks=take_obvious_picks)
+
+		if card2 == Card.Chopsticks:
+			return Pick(card1)
+
+		elif card2_state == _RandomPickState.great:
+			return Pick(card1, card2)
+		
+		elif card2_state == _RandomPickState.fine and (should_use_chopsticks or random_bool()):
+			return Pick(card1, card2)
+
+		elif card2_state == _RandomPickState.useless_to_me and should_use_chopsticks:
+			return Pick(card1, card2)
+
+	return Pick(card1)
+
+
+
+
+
+"""
+A very simple AI that's mostly random, but makes a few obvious choices (when possible):
+	- Don't pick a card that's guaranteed to be useless:
+		- More than 5 dumplings
+		- Sets that will be impossible to complete (based only on number of cards left - doesn't keep track of other hands)
+		- Chopsticks on 2nd last turn
+		- More wasabi than turns left
+	- Don't pick card that's straight worse than another
+		- e.g. if 3-maki is available, don't take 1- or 2-maki
+	- Always use chopsticks on 2nd last turn (if there's a point)
+"""
+class RandomPlusAI(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "RandomPlusAI"
+
+	@staticmethod
+	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
+		return _random_plus_pick_cards(player_state=player_state, hand=hand, take_obvious_picks=False, verbose=verbose)
+
+
 """
 A very simple AI that's mostly random, but makes a few obvious choices (when possible):
 	- Don't pick a card that's guaranteed to be useless:
@@ -150,79 +242,14 @@ A very simple AI that's mostly random, but makes a few obvious choices (when pos
 		- Complete a set if possible
 		- If we have an unused wasabi, take a squid
 """
-class RandomPlusAI(PlayerInterface):
+class RandomPlusPlusAI(PlayerInterface):
 	@staticmethod
 	def get_name() -> str:
-		return "RandomPlusAI"
+		return "RandomPlusPlusAI"
 
-	def __init__(self, take_obvious_picks=True):
-		self.take_obvious_picks = take_obvious_picks
-
-	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
-
-		if len(hand) == 1:
-			return Pick(hand[0])
-
-		plate = player_state.plate
-
-		num_chopsticks = count_card(plate, Card.Chopsticks)
-
-		can_use_chopsticks = num_chopsticks and len(hand) > 1
-		should_use_chopsticks = can_use_chopsticks and len(hand) == 1 + num_chopsticks
-
-		# First, handle certain obvious picks for pairs of cards, which the individual card picks would miss
-		if self.take_obvious_picks and can_use_chopsticks:
-			hand_count = Counter(hand)
-
-			if Card.Sashimi in hand_count and hand_count[Card.Sashimi] >= 2 and get_num_sashimi_needed(plate) == 2:
-				return Pick(Card.Sashimi, Card.Sashimi)  # 10 points
-
-			if Card.Wasabi in hand and Card.SquidNigiri in hand and not get_num_unused_wasabi(plate):
-				return Pick(Card.Wasabi, Card.SquidNigiri)  # 9 points
-
-			if Card.Dumpling in hand_count and hand_count[Card.Dumpling] >= 2 and count_card(plate, Card.Dumpling) == 3:
-				return Pick(Card.Dumpling, Card.Dumpling)  # 9 points
-			
-			# TOOD: wasabi-salmon? 2 tempura? 2 sashimi when num_sashimi_needed == 3?
-
-		# Pick first card
-
-		card1, _ = _random_plus_pick_card(
-			plate=plate,
-			hand=hand,
-			verbose=verbose,
-			take_obvious_picks=self.take_obvious_picks,
-			)
-
-		# TODO: this blocks rare case of using chopsticks to take 2 chopsticks
-		if (card1 == Card.Chopsticks):
-			return Pick(card1)
-
-		if can_use_chopsticks:
-
-			# Pick possible 2nd card
-
-			plate_after = list(plate)
-			hand_after = list(hand)
-			plate_after.append(card1)
-			hand_after.remove(card1)
-
-			card2, card2_state = _random_plus_pick_card(
-				plate=plate_after, hand=hand_after, verbose=verbose, take_obvious_picks=self.take_obvious_picks)
-
-			if card2 == Card.Chopsticks:
-				return Pick(card1)
-
-			elif card2_state == _RandomPickState.great:
-				return Pick(card1, card2)
-			
-			elif card2_state == _RandomPickState.fine and (should_use_chopsticks or random_bool()):
-				return Pick(card1, card2)
-
-			elif card2_state == _RandomPickState.useless_to_me and should_use_chopsticks:
-				return Pick(card1, card2)
-
-		return Pick(card1)
+	@staticmethod
+	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
+		return _random_plus_pick_cards(player_state=player_state, hand=hand, take_obvious_picks=True, verbose=verbose)
 
 
 """
