@@ -30,15 +30,32 @@ class Card(IntEnum):
 			Card.Tempura: 'Tempura',
 			Card.Sashimi: 'Sashimi',
 			Card.Dumpling: 'Dumpling',
-			Card.Maki1: '1 Maki',
-			Card.Maki2: '2 Maki',
-			Card.Maki3: '3 Maki',
+			Card.Maki1: 'Maki 1',
+			Card.Maki2: 'Maki 2',
+			Card.Maki3: 'Maki 3',
 			Card.EggNigiri: 'Egg Nigiri',
 			Card.SalmonNigiri: 'Salmon Nigiri',
 			Card.SquidNigiri: 'Squid Nigiri',
 			Card.Wasabi: 'Wasabi',
 			Card.Pudding: 'Pudding',
 			Card.Chopsticks: 'Chopsticks',
+		}[self]
+
+	def short_name(self) -> str:
+		return {
+			Card.Unknown: '???',
+			Card.Tempura: 'TEM',
+			Card.Sashimi: 'SAS',
+			Card.Dumpling: 'DUM',
+			Card.Maki1: 'MA1',
+			Card.Maki2: 'MA2',
+			Card.Maki3: 'MA3',
+			Card.EggNigiri: 'EGG',
+			Card.SalmonNigiri: 'SAL',
+			Card.SquidNigiri: 'SQU',
+			Card.Wasabi: 'WAS',
+			Card.Pudding: 'PUD',
+			Card.Chopsticks: 'CHO',
 		}[self]
 
 	def is_maki(self) -> bool:
@@ -69,7 +86,7 @@ class Pick(Sequence[Card]):
 		if (b is not None) and not self._order_may_matter(a=a, b=b):
 			a, b = sorted((a, b))
 		assert isinstance(a, Card)
-		assert b is None or isinstance(b, Card)
+		assert (b is None) or isinstance(b, Card)
 		self._a: Card = a
 		self._b: Optional[Card] = b
 
@@ -137,36 +154,64 @@ class Pick(Sequence[Card]):
 	def __contains__(self, card: Card) -> bool:
 		return card in self.as_pair()
 
-	def __hash__(self):
-		return hash(self.as_pair())
+	def __eq__(self, other: Union['Pick', Card]) -> bool:
+		if isinstance(other, Card):
+			return (self._b is None) and (self._a == other)
+		else:
+			return self.as_pair() == other.as_pair()
+
+	def __hash__(self) -> int:
+		if self._b is None:
+			return hash(self._a)
+		else:
+			return hash(self.as_pair())
 
 	def __str__(self) -> str:
 		if self._b is None:
 			return str(self._a)
 		return f'{self._a} + {self._b}'
 
+	def short_name(self) -> str:
+		if self._b is None:
+			return self._a.short_name()
+		return f'{self._a.short_name()} + {self._b.short_name()}'
+
 	def __repr__(self) -> str:
 		return f'Pick(a={self._a}, b={self._b}, order_may_matter={self.order_may_matter})'
 
 
-def card_names(cards: Iterable[Union[Card, Tuple[Card, Card], Pick]], sort=False) -> str:
+def card_names(cards: Iterable[Union[Card, Tuple[Card, Card], Pick]], sort=False, short=False) -> str:
+
+	if isinstance(cards, (set, frozenset)):
+		start_chr = '{'
+		end_chr = '}'
+	else:
+		start_chr = '['
+		end_chr = ']'
 
 	if not cards:
-		return "[]"
+		return start_chr + end_chr
 
 	# TODO: if sorted, count uniques - e.g. display "[2 Tempura]" instead of "[Tempura, Tempura]"
-
 	display_list = sorted(list(cards)) if sort else cards
 
-	return "[" + ", ".join([str(card) for card in display_list]) + "]"
+	if short:
+		display_list = [card.short_name() for card in display_list]
+	else:
+		display_list = [str(card) for card in display_list]
+
+	return start_chr + ", ".join(display_list) + end_chr
 
 
-def dict_card_names(cards: Dict[Card, Any], sort=True) -> str:
+def dict_card_names(cards: Dict[Card, Any], sort=True, short=False) -> str:
 
 	keys = cards.keys()
 	if sort:
 		keys = sort_cards(keys)
 
-	dict_list = [f"{card}: {cards[card]}" for card in keys]
+	if short:
+		dict_list = [f"{card.short_name()}: {cards[card]}" for card in keys]
+	else:
+		dict_list = [f"{card}: {cards[card]}" for card in keys]
 
 	return "{" + ", ".join(dict_list) + "}"

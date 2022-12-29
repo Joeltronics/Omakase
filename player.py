@@ -35,6 +35,40 @@ def get_player_name() -> str:
 
 
 @dataclass
+class CommonGameState:
+	deck_count: int
+	starting_deck_distribution: dict
+	num_players: int
+	num_rounds: int
+	round_idx: int
+	num_cards_per_player_per_round: int
+	round_pass_forward: bool
+	show_hands: bool = False
+
+	@property
+	def last_round(self) -> bool:
+		return self.round_idx == self.num_rounds - 1
+
+	@property
+	def total_num_cards_per_round(self) -> int:
+		return self.num_players * self.num_cards_per_player_per_round
+
+	@property
+	def num_cards_dealt(self) -> int:
+		return (self.round_idx + 1) * self.total_num_cards_per_round
+
+	@property
+	def num_cards_to_be_dealt(self) -> int:
+		num_rounds_remaining = self.num_rounds - (self.round_idx + 1)
+		return num_rounds_remaining * self.total_num_cards_per_round
+
+	@property
+	def num_cards_remaining_in_deck(self) -> int:
+		return self.deck_count - self.num_cards_dealt
+
+
+
+@dataclass
 class PublicPlayerState:
 	name: str
 	plate: list[Card] = field(default_factory=list)
@@ -42,31 +76,34 @@ class PublicPlayerState:
 	total_score: int = 0
 	num_pudding: int = 0
 
+	# TODO: this doesn't really belong in PublicPlayerState
+	# TODO: make this a deque
 	hand: Optional[list[Card]] = None
 
 
 class PlayerState:
-	def __init__(self, deck_dist: dict, name='', show_hand=False):
+	def __init__(self, common_game_state: CommonGameState, name=''):
 
 		# Public info
 
 		if not name:
 			name = get_player_name()
-		
+
+		self.common_game_state = deepcopy(common_game_state)
+
 		self.public_state = PublicPlayerState(name=name)
 		self.plate = self.public_state.plate
 		self.play_history = self.public_state.play_history
 
 		# Knowledge of deck and other players' state
-		self.deck_dist = deepcopy(deck_dist)
+		self.deck_dist = deepcopy(common_game_state.starting_deck_distribution)
+		# TODO: store single list of all PublicPlayerState including own, instead of separate
 		self.other_player_states: List[PublicPlayerState] = []
 		self.num_unseen_dealt_cards = 0
 
 		# Private info
-		self.hand: Optional[List] = None
-		self.passing_hand = None
-
-		self.show_hand = show_hand
+		self.hand: Optional[List] = None  # TODO: deque
+		self.passing_hand = None  # To temporarily store hand that we just passed, before receiving new hand
 
 	@property
 	def name(self) -> str:
@@ -80,11 +117,15 @@ class PlayerState:
 	def num_pudding(self) -> int:
 		return self.public_state.num_pudding
 
+	@property
+	def any_unknown_cards(self) -> bool:
+		return self.num_unseen_dealt_cards > 0
+
 	def assign_hand(self, hand):
 		# Sorting not actually necessary, but helps print formatting
 		self.hand = sort_cards(hand)
 
-		if self.show_hand:
+		if self.common_game_state.show_hands:
 			self.public_state.hand = self.hand
 
 	def update_deck_dist(self, cards_to_remove: Union[Card, Iterable[Card], Counter[Card]], previously_unseen=True):
@@ -233,6 +274,7 @@ class PlayerState:
 
 		# Compare passed_hand with self.hand
 		# These should be the same, except for cards that were previously unknown
+
 		assert len(passed_hand) == len(self.hand)
 		assert Card.Unknown not in self.hand
 		hand_before_seeing = Counter(passed_hand)
@@ -341,7 +383,7 @@ class PlayerState:
 		return s
 
 
-def init_other_player_states_after_dealing_hands(players: Sequence[PlayerState], round_pass_forward=True, verbose=True):
+def init_other_player_states_after_dealing_hands(players: Sequence[PlayerState], round_idx: int, round_pass_forward=True, verbose=True):
 
 	players_list = players if round_pass_forward else list(reversed(players))
 
@@ -354,6 +396,9 @@ def init_other_player_states_after_dealing_hands(players: Sequence[PlayerState],
 
 	num_players = len(players)
 	for this_player_idx, player in enumerate(players_list):
+
+		player.common_game_state.round_idx = round_idx
+		player.common_game_state.round_pass_forward = round_pass_forward
 
 		player.other_player_states = []
 
@@ -401,7 +446,7 @@ class PlayerInterface:
 	def play_turn(
 			self,
 			player_state: PlayerState,
-			hand: Collection[Card],
+			hand: Collection[Card],  # TODO: this is redundant with player_state
 			verbose=False,
 			) -> Pick:
 		"""

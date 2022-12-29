@@ -8,7 +8,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Union
 
 from cards import Card, Pick, card_names
 from deck import Deck, get_deck_distribution
-from player import PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
+from player import CommonGameState, PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
 from tunnel_vision_ai import TunnelVisionAI
 import scoring
 from utils import add_numbers_to_duplicate_names
@@ -79,8 +79,19 @@ class Game:
 		player_names = add_numbers_to_duplicate_names(player_names)
 		assert len(player_names) == len(set(player_names))
 
+		common_game_state = CommonGameState(
+			deck_count=sum(deck_dist.values()),
+			starting_deck_distribution=deck_dist,
+			num_players=num_players,
+			num_rounds=num_rounds,
+			round_idx=0,
+			num_cards_per_player_per_round=self._num_cards_per_player,
+			round_pass_forward=True,
+			show_hands=omniscient,
+		)
+
 		self._print('Creating players')
-		self._player_states = [PlayerState(deck_dist, name=name, show_hand=omniscient) for name in player_names]
+		self._player_states = [PlayerState(common_game_state=common_game_state, name=name) for name in player_names]
 		self._public_states_dict = {p.name: p.public_state for p in self._player_states}
 
 		assert len(self._player_states) == len(set([p.name for p in self._player_states])), "Player names should be guaranteed unique at this point"
@@ -116,7 +127,7 @@ class Game:
 			self._print()
 
 			init_other_player_states_after_dealing_hands(
-				self._player_states, round_pass_forward=round_pass_forward, verbose=self.verbose)
+				self._player_states, round_idx=round_idx, round_pass_forward=round_pass_forward, verbose=self.verbose)
 
 			for turn_idx in range(self._num_cards_per_player):
 				if self._num_rounds > 1:
@@ -127,7 +138,7 @@ class Game:
 				self._play_turn(pass_forward=round_pass_forward)
 				self._pause()
 
-			scoring.score_round(self._player_states, print_it=self.verbose)
+			scoring.score_round_players(self._player_states, print_it=self.verbose)
 
 			self._print('Scores after round:')
 			for player in self._player_states:
@@ -136,7 +147,7 @@ class Game:
 
 			self._pause()
 
-		scoring.score_puddings(self._player_states, print_it=self.verbose)
+		scoring.score_player_puddings(self._player_states, print_it=self.verbose)
 
 		names =         [s.name        for s in self._player_states]
 		scores =        [s.total_score for s in self._player_states]
@@ -164,14 +175,19 @@ class Game:
 				self._print("State:")
 				self._print(state.dump())
 
-			# TODO: dump full state if this or play_card/play_chopsticks throws an exception
+			# TODO: dump full state if this or state.play_turn() throws an exception
 			pick = player.play_turn(deepcopy(state), copy(state.hand), verbose=verbose)
+
+			self._print(f"Plays: {pick}")
+
+			if isinstance(pick, Card):
+				# TODO: log a warning
+				pick = Pick(pick)
 
 			if not isinstance(pick, Pick):
 				raise ValueError(f'AI played invalid: {pick!r}')
 
 			state.play_turn(pick)
-			self._print(f"Plays: {pick}")
 
 			self._print()
 

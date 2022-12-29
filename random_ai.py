@@ -151,7 +151,7 @@ def _random_plus_pick_cards(
 	num_chopsticks = count_card(plate, Card.Chopsticks)
 
 	can_use_chopsticks = num_chopsticks and len(hand) > 1
-	should_use_chopsticks = can_use_chopsticks and len(hand) == 1 + num_chopsticks
+	should_use_chopsticks = can_use_chopsticks and len(hand) <= (1 + num_chopsticks)
 
 	# First, handle certain obvious picks for pairs of cards, which the individual card picks would miss
 	if take_obvious_picks and can_use_chopsticks:

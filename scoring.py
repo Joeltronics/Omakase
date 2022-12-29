@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
+from collections import namedtuple
 from collections.abc import Sequence
-from typing import List
+from typing import List, Union
 
 from cards import Card
 import cards
@@ -69,7 +70,7 @@ def score_nigiri(plate: Sequence[Card]) -> int:
 	return score
 
 
-def score_plate(plate: Sequence[Card]) -> int:
+def score_plate_besides_maki_pudding(plate: Sequence[Card]) -> int:
 	# This only scores cards that count in a plate by itself
 	# e.g. doesn't count Maki or Pudding
 	
@@ -81,69 +82,74 @@ def score_plate(plate: Sequence[Card]) -> int:
 	return score
 
 
-def score_round(players: Sequence[PlayerState], print_it=True):
+def score_plates(plates: Sequence[Sequence[Card]]) -> list[int]:
 
-	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = count_maki_players(players)
+	nums_maki = [count_maki(plate) for plate in plates]
 
+	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = _count_maki_plates(nums_maki)
+
+	def _score_plate_including_maki(plate, num_maki):
+		round_score = score_plate_besides_maki_pudding(plate)
+
+		if num_maki == max_maki_count:
+			round_score += points_most_maki
+		elif num_maki == second_maki_count:
+			round_score += points_second_most_maki
+		
+		return round_score
+
+	return [_score_plate_including_maki(plate, num_maki) for plate, num_maki in zip(plates, nums_maki)]
+
+
+def score_round_players(players: Sequence[PlayerState], print_it=True):
+
+	plate_scores = score_plates([p.plate for p in players])
+
+	# TODO: maybe print Maki counts, and separate breakdown of points from Maki?
 	if print_it:
 		print('Scoring:')
 
-	for player in players:
-		round_score = score_plate(player.plate)
-
-		maki = count_maki(player.plate)
-
-		if maki == max_maki_count:
-			round_score += points_most_maki
-		elif maki == second_maki_count:
-			round_score += points_second_most_maki
-
+	for player, round_score in zip(players, plate_scores):
 		if print_it:
 			print("\t%s: %s, score: %i" % (player.name, cards.card_names(player.plate, sort=True), round_score))
-
 		player.end_round(round_score)
 
 	if print_it:
 		print()
 
 
-def count_maki_players(players: Sequence[PlayerState]):
+def _count_maki_plates(nums_maki: Sequence[int]) -> Tuple[int, int, int, int]:
 
-	nums_maki = []
-	for player in players:
-		maki = count_maki(player.plate)
-		nums_maki.append(maki)
+	assert len(nums_maki) >= 2
 
-	nums_maki = sorted(nums_maki)
+	nums_maki = sorted(nums_maki, reverse=True)
 
-	# Now figure out how many points each number of maki is worth
-
-	max_maki_count = max(nums_maki)
+	max_maki_count = nums_maki[0]
+	second_maki_count = nums_maki[1]
 
 	if max_maki_count == 0:
-		# Nobody has any Maki - 0 points all around
+		# Nobody has Maki
 		return 0, 0, 0, 0
 
-	num_players_max_maki_count = len([n for n in nums_maki if n == max_maki_count])
-	nums_maki.remove(max_maki_count)
-	second_maki_count = max(nums_maki)
-	num_players_second_maki_count = len([n for n in nums_maki if n == second_maki_count])
-
+	num_players_max_maki_count = sum(n == max_maki_count for n in nums_maki)
+	assert num_players_max_maki_count > 0
 	points_most_maki = 6 // num_players_max_maki_count
-	points_second_most_maki = 3 // num_players_second_maki_count
+
+	assert (num_players_max_maki_count > 1) == (max_maki_count == second_maki_count)
 
 	if (num_players_max_maki_count > 1) or (second_maki_count == 0):
 		points_second_most_maki = 0
+	else:
+		num_players_second_maki_count = sum(n == second_maki_count for n in nums_maki)
+		assert num_players_second_maki_count > 0
+		points_second_most_maki = 3 // num_players_second_maki_count
 
 	return max_maki_count, points_most_maki, second_maki_count, points_second_most_maki
 
 
-def count_pudding_players(players: Sequence[PlayerState]):
-	assert len(players) > 1
-
-	nums_pudding = []
-	for player in players:
-		nums_pudding.append(player.num_pudding)
+def _count_pudding(nums_pudding: Sequence[int]) -> Tuple[int, int, int, int]:
+	num_players = len(nums_pudding)
+	assert num_players > 1
 
 	nums_pudding = sorted(nums_pudding)
 
@@ -156,7 +162,7 @@ def count_pudding_players(players: Sequence[PlayerState]):
 		# If everyone tied (possibly at 0)
 		neg_points_least_pudding = 0
 
-		if max_pudding_count > 0 and (players) == 2:
+		if max_pudding_count > 0 and num_players == 2:
 			points_most_pudding = 3
 		else:
 			points_most_pudding = 0
@@ -166,7 +172,7 @@ def count_pudding_players(players: Sequence[PlayerState]):
 		num_players_min_count = len([n for n in nums_pudding if n == min_pudding_count])
 		points_most_pudding = 6 / num_players_max_count
 
-		if len(players) == 2:
+		if num_players == 2:
 			neg_points_least_pudding = 0
 		else:
 			neg_points_least_pudding = 6 / num_players_min_count
@@ -174,34 +180,45 @@ def count_pudding_players(players: Sequence[PlayerState]):
 	return max_pudding_count, points_most_pudding, min_pudding_count, neg_points_least_pudding
 
 
-def score_puddings(players: Sequence[PlayerState], print_it=True):
-	max_pudding_count, points_most_pudding, min_pudding_count, neg_points_least_pudding = count_pudding_players(players)
+def score_puddings(num_puddings: Sequence[int]) -> List[int]:
+
+	max_pudding_count, points_most_pudding, min_pudding_count, neg_points_least_pudding = _count_pudding(num_puddings)
+
+	def _score_pudding(num_pudding: int) -> int:
+		if num_pudding == max_pudding_count:
+			return points_most_pudding
+		elif num_pudding == min_pudding_count:
+			return -neg_points_least_pudding
+		else:
+			return 0
+
+	return [_score_pudding(num_pudding) for num_pudding in num_puddings]
+
+
+def score_player_puddings(players: Sequence[PlayerState], print_it=True):
 
 	if print_it:
 		print('Scoring pudding:')
 
-	for player in players:
+	pudding_scores = score_puddings([p.num_pudding for p in players])
 
-		score = 0
+	for player, pudding_score in zip(players, pudding_scores):
 
-		# Have to check both max and min (not if-elif), in case max == min
-
-		if player.num_pudding == max_pudding_count:
-			score += points_most_pudding
-
-		if player.num_pudding == min_pudding_count:
-			score -= neg_points_least_pudding
-
-		player.score_puddings(score)
+		player.score_puddings(pudding_score)
 
 		if print_it:
-			print("\t%s: %i pudding (%i points), total score: %i" % (player.name, player.num_pudding, score, player.total_score))
+			print("\t%s: %i pudding (%i points), total score: %i" % (player.name, player.num_pudding, pudding_score, player.total_score))
 
 	if print_it:
 		print()
 
 
-def rank_players(players: Sequence[PlayerState], print_it=True) -> List[int]:
+ScoreAndPudding = namedtuple('ScoreAndPudding', ['total_score', 'num_pudding'])
+
+
+def rank_players(players: Sequence[Union[PlayerState, ScoreAndPudding]], print_it=False) -> List[int]:
+
+	assert len(players) > 0
 
 	unscored_players = {idx: player for idx, player in enumerate(players)}
 	player_ranks = dict()
@@ -266,7 +283,7 @@ def rank_players(players: Sequence[PlayerState], print_it=True) -> List[int]:
 	if print_it:
 		print('Final results:')
 		for player, rank in sorted(zip(players, player_ranks_list), key=lambda p_r: p_r[1]):
-			print(f'\t{rank}: {player.name}')
+			print(f'\t{rank}: {player.name}')  # FIXME: will throw if using ScoreAndPudding option
 
 	return player_ranks_list
 
@@ -275,7 +292,7 @@ def _test():
 	import random
 
 	def ensure_score(plate, expected_score):
-		score = score_plate(plate)
+		score = score_plate_besides_maki_pudding(plate)
 		if score != expected_score:
 			print("Test failed!")
 			print("Plate:")

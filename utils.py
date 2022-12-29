@@ -2,9 +2,10 @@
 
 from collections import Counter
 from collections.abc import Collection, Iterable, Sequence
+from copy import copy
 import itertools
 import random
-from typing import Tuple, List, Set
+from typing import Tuple, List, Optional, Set
 
 from cards import Card, Pick
 
@@ -20,7 +21,7 @@ def count_card(cards: Iterable[Card], card: Card) -> int:
 	if isinstance(cards, Sequence):
 		return cards.count(card)
 	else:
-		return len([c for c in cards if c == card])
+		return sum(c == card for c in cards)
 
 
 def get_num_unused_wasabi(plate: Sequence[Card]) -> int:
@@ -48,10 +49,26 @@ def random_order_and_inverse(num_players) -> Tuple[List[int], List[int]]:
 	return order, inverse_order
 
 
-def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int) -> Set[Pick]:
+def _prune_likely_bad_picks(options: set[Card]) -> None:
 
-	# TODO: Add an option to eliminate obvious picks (no point taking a lower-value nigiri or maki if a higher-value is available)
-	# Make sure it's optional though - there could be very rare cases where it's advantageous to take a lower value
+	# Eliminate obvious picks
+	# 99% of the time there's no point taking a lower-value nigiri or maki if a higher value is available
+	# There could be very rare cases where it's advantageous to take a lower value, hence why this is optional
+
+	if Card.SquidNigiri in options:
+		options.discard(Card.SalmonNigiri)
+		options.discard(Card.EggNigiri)
+	elif Card.SalmonNigiri in options:
+		options.discard(Card.EggNigiri)
+
+	if Card.Maki3 in options:
+		options.discard(Card.Maki2)
+		options.discard(Card.Maki1)
+	elif Card.Maki2 in options:
+		options.discard(Card.Maki1)
+
+
+def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int, prune_likely_bad_picks=False) -> Set[Pick]:
 
 	# There's no point to using chopsticks to take more chopsticks, so remove these first (before taking combinations)
 	# Except for odd case of 2 chopsticks, which we will add back later (after calculating combinations)
@@ -67,7 +84,19 @@ def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int) -> Set[P
 	# Order only matters when nigiri + wasabi is involved (either a wasabi from before, or a new one)
 	# So take all combinations (not permuations), then manually add swapped-order pairs that matter after
 
-	choices = {Pick(*choice) for choice in itertools.combinations(card_options, 2)}
+	if not prune_likely_bad_picks:
+		choices = {Pick(*choice) for choice in itertools.combinations(card_options, 2)}
+	else:
+		first_card_options = set(card_options)
+		_prune_likely_bad_picks(first_card_options)
+		choices = set()
+		for first_card in first_card_options:
+			second_card_choices = copy(card_options)
+			second_card_choices.remove(first_card)
+			second_card_choices = set(second_card_choices)
+			_prune_likely_bad_picks(second_card_choices)
+			for second_card in second_card_choices:
+				choices.add(Pick(*sorted((first_card, second_card))))
 
 	swapped_choices = set()
 	if num_unused_wasabi <= 1:
@@ -88,6 +117,34 @@ def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int) -> Set[P
 		choices.add(Pick(Card.Chopsticks, Card.Chopsticks))
 
 	return choices
+
+
+def get_all_picks(
+		hand: Collection[Card],
+		plate: Sequence[Card],
+		prune_likely_bad_picks = False,
+		) -> Set[Pick]:
+
+	num_chopsticks = count_card(plate, Card.Chopsticks)
+	can_use_chopsticks = num_chopsticks and len(hand) > 1
+
+	if prune_likely_bad_picks:
+		if can_use_chopsticks and len(hand) <= (1 + num_chopsticks) and (Card.Chopsticks not in hand):
+			# Don't bother including non-chopstick picks
+			options = set()
+		else:
+			options = {card for card in hand}
+			_prune_likely_bad_picks(options)
+			options = {Pick(card) for card in options}
+	else:
+		options = {Pick(card) for card in hand}
+
+	if can_use_chopsticks:
+		options |= get_chopstick_picks(
+			hand, num_unused_wasabi=get_num_unused_wasabi(plate), prune_likely_bad_picks=prune_likely_bad_picks)
+
+	assert options
+	return options
 
 
 def add_numbers_to_duplicate_names(player_names: Sequence[str]) -> List[str]:
