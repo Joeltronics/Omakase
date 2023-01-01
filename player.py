@@ -446,10 +446,9 @@ class PlayerInterface:
 	def play_turn(
 			self,
 			player_state: PlayerState,
-			hand: Collection[Card],  # TODO: this is redundant with player_state
 			verbose=False,
 			) -> Pick:
 		"""
-		:returns: card to play, or 2 cards if playing chopsticks (must have chopsticks on plate)
+		:returns: card from player_state.hand to play, or 2 cards if playing chopsticks (must have chopsticks on plate)
 		"""
 		raise NotImplementedError('To be implemented by the child class!')

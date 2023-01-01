@@ -11,7 +11,7 @@ from numbers import Real
 from typing import List, Literal, Optional, Tuple, Union
 
 from cards import Card, Pick, card_names
-from player import CommonGameState, PlayerInterface, PlayerState
+from player import PlayerInterface, PlayerState
 from probablistic_scoring import ProbablisticScorer
 import scoring
 from utils import count_card, get_all_picks
@@ -398,37 +398,47 @@ def solve_recursive(
 
 	minimal_player_state = _MinimalPlayerState.from_player_state(player_state)
 
-	# Base number of possibilities: how big the "tree size" is
-	# But this is assuming no chopsticks, and that all cards are unique (and viable picks)
-	#
-	# 2 players = 10 cards, first know all hands on turn 2 (9 cards in hand)
-	# Turn 2, 9 cards:        1e11
-	# Turn 3, 8 cards:        2e9
-	# Turn 4, 7 cards:        3e7
-	# Turn 5, 6 cards:  518,499
-	# Turn 6, 5 cards:   14,400
-	# Turn 7, 4 cards:      576
-	# Turn 8, 3 cards:       36
-	# Turn 9, 2 cards:        4
-	#
-	# 3 players = 9 cards, first know all hands on turn 3 (7 cards in hand)
-	# Turn 3, 7 cards:         1e11
-	# Turn 4, 6 cards:         4e8
-	# Turn 5, 5 cards: 1,728,000
-	# Turn 6, 4 cards:    13,284
-	# Turn 7, 3 cards:       215
-	# Turn 8, 2 cards:         9
-	#
-	# 4 players = 8 cards, first know all hands on turn 4 (5 cards in hand)
-	# Turn 4, 5 cards:         2e8
-	# Turn 5, 4 cards:   331,776
-	# Turn 6, 3 cards:     1,296
-	# Turn 7, 2 cards:        16
-	#
-	# 5 players = 7 cards, first know all hands on turn 5 (3 cards in hand)
-	# Turn 5, 3 cards:     7,776
-	# Turn 6, 2 cards:        32
-	# TODO: also attempt to factor in chopsticks
+	"""
+	Base number of possibilities: how big the "tree size" is
+	But this is assuming no chopsticks, and that all cards are unique (and viable picks)
+	
+	2 players = 10 cards, first know all hands on turn 2 (9 cards in hand)
+	Turn 2, 9 cards:        1e11
+	Turn 3, 8 cards:        2e9
+	Turn 4, 7 cards:        3e7
+	Turn 5, 6 cards:  518,499
+	Turn 6, 5 cards:   14,400
+	Turn 7, 4 cards:      576
+	Turn 8, 3 cards:       36
+	Turn 9, 2 cards:        4
+	
+	3 players = 9 cards, first know all hands on turn 3 (7 cards in hand)
+	Turn 3, 7 cards:         1e11
+	Turn 4, 6 cards:         4e8
+	Turn 5, 5 cards: 1,728,000
+	Turn 6, 4 cards:    13,284
+	Turn 7, 3 cards:       215
+	Turn 8, 2 cards:         9
+	
+	4 players = 8 cards, first know all hands on turn 4 (5 cards in hand)
+	Turn 4, 5 cards:         2e8
+	Turn 5, 4 cards:   331,776
+	Turn 6, 3 cards:     1,296
+	Turn 7, 2 cards:        16
+	
+	5 players = 7 cards, first know all hands on turn 5 (3 cards in hand)
+	Turn 5, 3 cards:     7,776
+	Turn 6, 2 cards:        32
+
+	TODO: also attempt to factor in chopsticksexit()
+
+	If we limit the max number of picks to 3 per step, then:
+
+	4 players
+	Turn 4, 5 cards: (3*3*3*2*1) ^ 4 = 8,503,056
+	Turn 5, 4 cards: (3*3*2*1) ^ 4 =     104,976
+
+	"""
 	base_num_possibilities = factorial(num_cards) ** num_players
 
 	if verbose:
@@ -467,6 +477,21 @@ class RecursiveSolverAI(PlayerInterface):
 		return "RecursiveSolverAI"
 
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
-		assert hand == player_state.hand
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
 		return solve_recursive(player_state=player_state, verbose=verbose)
+
+
+class LaterRecursiveAi(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "LaterRecursiveAi"
+
+	def __init__(self, non_recursive_ai: PlayerInterface, max_recursive_hand_size: int = 3):
+		self.non_recursive_ai = non_recursive_ai
+		self.max_recursive_hand_size = max_recursive_hand_size
+
+	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
+		if len(player_state.hand) > self.max_recursive_hand_size or player_state.any_unknown_cards:
+			return self.non_recursive_ai.play_turn(player_state=player_state, verbose=verbose)
+		else:
+			return solve_recursive(player_state=player_state, verbose=verbose)

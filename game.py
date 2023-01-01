@@ -176,7 +176,7 @@ class Game:
 				self._print(state.dump())
 
 			# TODO: dump full state if this or state.play_turn() throws an exception
-			pick = player.play_turn(deepcopy(state), copy(state.hand), verbose=verbose)
+			pick = player.play_turn(deepcopy(state), verbose=verbose)
 
 			self._print(f"Plays: {pick}")
 

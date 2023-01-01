@@ -12,7 +12,7 @@ from typing import List, Optional
 from tqdm import tqdm, trange
 
 from random_ai import RandomAI, RandomPlusAI, RandomPlusPlusAI
-from recursive_solver_ai import RecursiveSolverAI
+from recursive_solver_ai import RecursiveSolverAI, LaterRecursiveAi
 from tunnel_vision_ai import TunnelVisionAI
 
 from cards import Card
@@ -89,7 +89,13 @@ def _get_deck_distribution(args):
 
 def _setup_players(args):
 	if args.recursive_test:
-		players = [RecursiveSolverAI(), TunnelVisionAI()]
+		print('--recursive-test given, using recursive AI')
+
+		if args.omniscient:
+			players = [RecursiveSolverAI(), TunnelVisionAI()]
+		else:
+			players = [LaterRecursiveAi(non_recursive_ai=TunnelVisionAI()), TunnelVisionAI()]
+
 		if args.players >= 3:
 			players.append(RandomPlusPlusAI())
 		if args.players >= 4:
@@ -209,15 +215,6 @@ def parse_args() -> argparse.Namespace:
 
 	args.num_rounds = None
 	args.num_cards_per_player = None
-
-	# --recursive-test
-
-	if args.recursive_test:
-		print('--recursive-test given, playing recursive test')
-		args.omniscient = True
-		# args.num_rounds = 1
-		args.num_cards_per_player = 3
-		# args.num_cards_per_player = 4
 
 	# --short
 

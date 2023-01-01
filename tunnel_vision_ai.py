@@ -575,92 +575,113 @@ class TunnelVisionAI(PlayerInterface):
 		self.always_take_chopsticks = always_take_chopsticks
 		self.chopstick_opportunity_cost = chopstick_opportunity_cost
 
-	def play_turn(self, player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
-		n_cards = len(hand)
-		assert n_cards > 0
+	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
+		return tunnel_vision_play_turn(
+			hand = player_state.hand,
+			plate = player_state.plate,
+			num_players = player_state.get_num_players(),
+			blocking_point_scale=self.blocking_point_scale,
+			opportunity_cost_scale=self.opportunity_cost_scale,
+			always_take_chopsticks=self.always_take_chopsticks,
+			chopstick_opportunity_cost=self.chopstick_opportunity_cost,
+			verbose=verbose,
+		)
 
-		if n_cards == 1:
-			return Pick(hand[0])
 
-		plate = player_state.plate
-		num_players = player_state.get_num_players()
+def tunnel_vision_play_turn(
+		hand: Sequence[Card],
+		plate: Sequence[Card],
+		num_players: int,
+		blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE,
+		opportunity_cost_scale: float = 1.0,
+		chopstick_opportunity_cost: bool = True,
+		always_take_chopsticks: bool = False,
+		verbose=False,
+		) -> Pick:
 
-		num_chopsticks = count_card(plate, Card.Chopsticks)
-		num_unused_wasabi = get_num_unused_wasabi(plate)
+	n_cards = len(hand)
+	assert n_cards > 0
 
-		can_use_chopsticks = num_chopsticks and len(hand) > 1
+	if n_cards == 1:
+		return Pick(hand[0])
 
-		# TODO: could make this slightly more efficient by eliminating some obvious picks (don't take lower nigiri or Maki)
+	num_chopsticks = count_card(plate, Card.Chopsticks)
+	num_unused_wasabi = get_num_unused_wasabi(plate)
+
+	can_use_chopsticks = num_chopsticks and len(hand) > 1
+
+	# TODO: could make this slightly more efficient by eliminating some obvious picks (don't take lower nigiri or Maki)
+	# Should just use utils.get_all_picks(), it has this logic built in
+	cards_points = {
+		Pick(card): _avg_points(
+			card,
+			plate=plate,
+			num_cards=len(hand),
+			num_players=num_players,
+			num_unused_wasabi=num_unused_wasabi,
+			num_chopsticks=num_chopsticks,
+			blocking_point_scale=blocking_point_scale,
+		) for card in set(hand)
+	}
+
+	if can_use_chopsticks:
+		chopstick_opportunity_cost = _using_chopsticks_opportunity_cost(
+			num_chopsticks=num_chopsticks,
+			num_cards_on_plate=len(plate),
+			num_cards_in_hand=n_cards,
+		) if chopstick_opportunity_cost else 0
+
+		chopstick_picks = get_chopstick_picks(hand=hand, num_unused_wasabi=num_unused_wasabi)
+		for chopstick_pick in chopstick_picks:
+			points = _pair_avg_points(
+					chopstick_pick.as_pair(),
+					plate=plate,
+					num_cards=len(hand),
+					num_players=num_players,
+					num_unused_wasabi=num_unused_wasabi,
+					num_chopsticks=num_chopsticks,
+					blocking_point_scale=blocking_point_scale,
+			)
+			points = points + CardPointsBreakdown(avg_opportunity_cost=chopstick_opportunity_cost)
+			cards_points[chopstick_pick] = points
+
+	# Add number of players & scale values
+
+	for v in cards_points.values():
+		v.num_other_players = num_players - 1
+		v.blocking_points_scale = blocking_point_scale
+		v.opportunity_cost_scale = opportunity_cost_scale
+
+	if verbose:
+		print_list = sorted(list(cards_points.items()), key=lambda pair: pair[1].total, reverse=True)
+
+		print('Possible picks:')
+		for card, points in print_list:
+			print(f'\t{str(card) + ":":16s} {points}')
+
+	if always_take_chopsticks and Card.Chopsticks in hand:
+		if verbose:
+			print('"Always take chopsticks" is set, so removing non chopstick choices')
 		cards_points = {
-			Pick(card): _avg_points(
-				card,
-				plate=plate,
-				num_cards=len(hand),
-				num_players=num_players,
-				num_unused_wasabi=num_unused_wasabi,
-				num_chopsticks=num_chopsticks,
-				blocking_point_scale=self.blocking_point_scale,
-			) for card in set(hand)
+			card: points for card, points in cards_points.items()
+			if (isinstance(card, Card) and card == Card.Chopsticks) or (isinstance(card, Tuple) and Card.Chopsticks in card)
 		}
+		assert cards_points
 
-		if can_use_chopsticks:
-			chopstick_opportunity_cost = _using_chopsticks_opportunity_cost(
-				num_chopsticks=num_chopsticks,
-				num_cards_on_plate=len(plate),
-				num_cards_in_hand=n_cards,
-			) if self.chopstick_opportunity_cost else 0
+	# Take highest point value option (if tied, take random from tied)
 
-			chopstick_picks = get_chopstick_picks(hand=hand, num_unused_wasabi=num_unused_wasabi)
-			for chopstick_pick in chopstick_picks:
-				points = _pair_avg_points(
-						chopstick_pick.as_pair(),
-						plate=plate,
-						num_cards=len(hand),
-						num_players=num_players,
-						num_unused_wasabi=num_unused_wasabi,
-						num_chopsticks=num_chopsticks,
-						blocking_point_scale=self.blocking_point_scale,
-				)
-				points = points + CardPointsBreakdown(avg_opportunity_cost=chopstick_opportunity_cost)
-				cards_points[chopstick_pick] = points
+	max_points = max([v.total for v in cards_points.values()])
+	max_point_picks = [
+		card
+		for card, points
+		in cards_points.items()
+		if points.total >= (max_points - FLOAT_EPSILON)
+	]
 
-		# Add number of players & scale values
+	if verbose:
+		if len(max_point_picks) > 1:
+			print(f'Picking randomly from top: [{card_names(max_point_picks)}]')
+		else:
+			print(f'Picking highest: {max_point_picks[0]}')
 
-		for v in cards_points.values():
-			v.num_other_players = num_players - 1
-			v.blocking_points_scale = self.blocking_point_scale
-			v.opportunity_cost_scale = self.opportunity_cost_scale
-
-		if verbose:
-			print_list = sorted(list(cards_points.items()), key=lambda pair: pair[1].total, reverse=True)
-
-			print('Possible picks:')
-			for card, points in print_list:
-				print(f'\t{str(card) + ":":16s} {points}')
-
-		if self.always_take_chopsticks and Card.Chopsticks in hand:
-			if verbose:
-				print('"Always take chopsticks" is set, so removing non chopstick choices')
-			cards_points = {
-				card: points for card, points in cards_points.items()
-				if (isinstance(card, Card) and card == Card.Chopsticks) or (isinstance(card, Tuple) and Card.Chopsticks in card)
-			}
-			assert cards_points
-
-		# Take highest point value option (if tied, take random from tied)
-
-		max_points = max([v.total for v in cards_points.values()])
-		max_point_picks = [
-			card
-			for card, points
-			in cards_points.items()
-			if points.total >= (max_points - FLOAT_EPSILON)
-		]
-
-		if verbose:
-			if len(max_point_picks) > 1:
-				print(f'Picking randomly from top: [{card_names(max_point_picks)}]')
-			else:
-				print(f'Picking highest: {max_point_picks[0]}')
-
-		return random.choice(max_point_picks)
+	return random.choice(max_point_picks)

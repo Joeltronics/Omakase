@@ -17,7 +17,8 @@ class RandomAI(PlayerInterface):
 		return "RandomAI"
 
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+		hand = player_state.hand
 		assert len(hand) > 0
 
 		can_use_chopsticks = Card.Chopsticks in player_state.plate and len(hand) >= 2
@@ -138,10 +139,11 @@ def _random_plus_pick_card(
 
 def _random_plus_pick_cards(
 		player_state: PlayerState,
-		hand: Collection[Card],
 		take_obvious_picks: bool,
 		verbose=False,
 		) -> Pick:
+
+	hand = player_state.hand
 
 	if len(hand) == 1:
 		return Pick(hand[0])
@@ -224,8 +226,8 @@ class RandomPlusAI(PlayerInterface):
 		return "RandomPlusAI"
 
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
-		return _random_plus_pick_cards(player_state=player_state, hand=hand, take_obvious_picks=False, verbose=verbose)
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+		return _random_plus_pick_cards(player_state=player_state, take_obvious_picks=False, verbose=verbose)
 
 
 """
@@ -248,8 +250,8 @@ class RandomPlusPlusAI(PlayerInterface):
 		return "RandomPlusPlusAI"
 
 	@staticmethod
-	def play_turn(player_state: PlayerState, hand: Collection[Card], verbose=False) -> Pick:
-		return _random_plus_pick_cards(player_state=player_state, hand=hand, take_obvious_picks=True, verbose=verbose)
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+		return _random_plus_pick_cards(player_state=player_state, take_obvious_picks=True, verbose=verbose)
 
 
 """
