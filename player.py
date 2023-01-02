@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Sequence
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
@@ -91,14 +91,10 @@ class PlayerState:
 
 		self.common_game_state = deepcopy(common_game_state)
 
-		self.public_state = PublicPlayerState(name=name)
-		self.plate = self.public_state.plate
-		self.play_history = self.public_state.play_history
+		self.public_states = [PublicPlayerState(name=name)]
 
-		# Knowledge of deck and other players' state
+		# Knowledge of deck
 		self.deck_dist = deepcopy(common_game_state.starting_deck_distribution)
-		# TODO: store single list of all PublicPlayerState including own, instead of separate
-		self.other_player_states: List[PublicPlayerState] = []
 		self.num_unseen_dealt_cards = 0
 
 		# Private info
@@ -106,20 +102,36 @@ class PlayerState:
 		self.passing_hand = None  # To temporarily store hand that we just passed, before receiving new hand
 
 	@property
+	def public_state(self) -> PublicPlayerState:
+		return self.public_states[0]
+
+	@property
+	def other_player_states(self) -> Sequence[PublicPlayerState]:
+		return self.public_states[1:]
+
+	@property
 	def name(self) -> str:
-		return self.public_state.name
+		return self.public_states[0].name
 
 	@property
 	def total_score(self) -> int:
-		return self.public_state.total_score
+		return self.public_states[0].total_score
 
 	@property
 	def num_pudding(self) -> int:
-		return self.public_state.num_pudding
+		return self.public_states[0].num_pudding
 
 	@property
 	def any_unknown_cards(self) -> bool:
 		return self.num_unseen_dealt_cards > 0
+
+	@property
+	def plate(self) -> Sequence[Card]:
+		return self.public_states[0].plate
+
+	@property
+	def play_history(self) -> Sequence[Pick]:
+		return self.public_states[0].play_history
 
 	def assign_hand(self, hand):
 		# Sorting not actually necessary, but helps print formatting
@@ -160,9 +172,8 @@ class PlayerState:
 				# but you probably shouldn't be using it that way anyway
 				remove(card_to_remove)
 
-	def get_num_players(self):
-		assert self.other_player_states, "Cannot call get_num_players before initializing player state"
-		return 1 + len(self.other_player_states)
+	def get_num_players(self) -> int:
+		return len(self.public_states)
 
 	def play_turn(self, pick: Pick):
 		if len(pick) == 2:
@@ -212,7 +223,7 @@ class PlayerState:
 
 	def update_other_player_state_before_pass(self, players: dict[str, PublicPlayerState], verbose=False):
 
-		assert self.other_player_states, "Cannot call update_other_player_state_before_pass before initializing player state"
+		assert len(self.public_states) > 1, "Cannot call update_other_player_state_before_pass before initializing player state"
 
 		# DEBUG
 		# TODO: use logging library for this
@@ -258,12 +269,12 @@ class PlayerState:
 
 		assert self.passing_hand is not None
 
-		passed_hand = self.other_player_states[-1].hand
+		passed_hand = self.public_states[-1].hand
 
-		num_other_players = len(self.other_player_states)
+		num_other_players = len(self.public_states) - 1
 		for idx in reversed(range(num_other_players-1)):
-			self.other_player_states[idx + 1].hand = self.other_player_states[idx].hand
-		self.other_player_states[0].hand = self.passing_hand
+			self.public_states[idx + 2].hand = self.public_states[idx + 1].hand
+		self.public_states[1].hand = self.passing_hand
 
 		self.passing_hand = None
 
@@ -296,8 +307,8 @@ class PlayerState:
 	def __str__(self):
 		return "(%s: plate %s, hand %s, pudding %i, score %i)" % (
 			self.name,
-			card_names(self.plate, sort=False),
-			card_names(self.hand, sort=False),
+			card_names(self.public_states[0].plate, sort=False),
+			card_names(self.public_states[0].hand, sort=False),
 			self.num_pudding,
 			self.total_score)
 
@@ -305,15 +316,15 @@ class PlayerState:
 
 		s = 'PlayerState(\n'
 		s += f'  name={self.name},\n'
-		s += f'  plate={card_names(self.plate, sort=False)},\n'
+		s += f'  plate={card_names(self.public_states[0].plate, sort=False)},\n'
 		s += f'  play_history={card_names(self.play_history, sort=False)},\n'
-		s += f'  hand={card_names(self.hand, sort=False)},\n'
+		s += f'  hand={card_names(self.public_states[0].hand, sort=False)},\n'
 		s += f'  total_score={self.total_score},\n'
 		s += f'  num_pudding={self.num_pudding},\n'
 
 		if self.other_player_states:
 			s += '  other_player_states=[\n'
-			for state in (self.other_player_states if self.other_player_states is not None else []):
+			for state in self.other_player_states:
 				assert state is not None
 				s += "    %s: plate %s, hand %s, pudding %i, score %i,\n" % (
 					state.name,
@@ -340,24 +351,22 @@ class PlayerState:
 		s += f'PlayerState for {self.name}:\n'
 		s += '\n'
 
-		public_states = [self.public_state] + self.other_player_states
-
 		sep = ' | '
 		eol = ' |\n'
 
-		s += f'{"Name:":<10}' + sep + sep.join([f'{s.name:^20}' for s in public_states]) + eol
-		s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score:>20}' for s in public_states]) + eol
-		s += f'{"Pudding:":<10}' + sep + sep.join([f'{s.num_pudding:>20}' for s in public_states]) + eol
+		s += f'{"Name:":<10}' + sep + sep.join([f'{s.name:^20}' for s in self.public_states]) + eol
+		s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score:>20}' for s in self.public_states]) + eol
+		s += f'{"Pudding:":<10}' + sep + sep.join([f'{s.num_pudding:>20}' for s in self.public_states]) + eol
 
 		# Plates may have different length due to puddings
-		max_plate_len = max(len(s.plate) for s in public_states)
+		max_plate_len = max(len(s.plate) for s in self.public_states)
 
 		if max_plate_len:
 			s += 'Plate:\n'
 			for idx in range(max_plate_len):
 				s += f'{"":10}' + sep + sep.join([
 					f'{s.plate[idx]:20}' if idx <= len(s.plate) else ' ' * 20
-					for s in public_states
+					for s in self.public_states
 				]) + eol
 		else:
 			s += 'Plate: [all empty]\n'
@@ -400,44 +409,52 @@ def init_other_player_states_after_dealing_hands(players: Sequence[PlayerState],
 		player.common_game_state.round_idx = round_idx
 		player.common_game_state.round_pass_forward = round_pass_forward
 
-		player.other_player_states = []
+		player.public_states = player.public_states[:1]
+		assert len(player.public_states) == 1
 
 		for other_player_rel_idx in range(num_players-1):
 			# Start with player after the current one
 			other_player_true_idx = (this_player_idx + other_player_rel_idx + 1) % num_players
 			other_player = players_list[other_player_true_idx]
-			player.other_player_states.append(deepcopy(other_player.public_state))
 
-		assert len(player.other_player_states) == num_players - 1
+			new_public_state = deepcopy(other_player.public_state)
+
+			if not new_public_state.hand:
+				new_public_state.hand = [Card.Unknown] * hand_num_cards
+
+			assert len(new_public_state.hand) == hand_num_cards
+			player.public_states.append(new_public_state)
+
+		assert len(player.public_states) == num_players
 
 		assert player.num_unseen_dealt_cards == 0
 		player.update_deck_dist(player.hand, previously_unseen=False)
 		assert player.num_unseen_dealt_cards == 0
 
 		for player_public_state in player.other_player_states:
-			if player_public_state.hand is not None:
-				player.update_deck_dist(player_public_state.hand, previously_unseen=False)
+			assert player_public_state.hand is not None
+			other_hand = player_public_state.hand
+			assert len(other_hand) == hand_num_cards
+			if Card.Unknown in other_hand:
+				assert all(card == Card.Unknown for card in other_hand)
+				player.num_unseen_dealt_cards += len(other_hand)
 			else:
-				player_public_state.hand = [Card.Unknown] * hand_num_cards
-				player.num_unseen_dealt_cards += hand_num_cards
+				player.update_deck_dist(other_hand, previously_unseen=False)
+
+		# player.num_unseen_dealt_cards = len(player.other_player_states) * hand_num_cards
+
+		assert player.num_unseen_dealt_cards == sum(sum(card == Card.Unknown for card in other.hand) for other in player.other_player_states)
 
 		if verbose and player.num_unseen_dealt_cards:
 			print("%s, %i unseen cards" % (player.name, player.num_unseen_dealt_cards))
 
 
 def pass_hands(players: Sequence[PlayerState], forward=True):
-	last_player_idx = len(players) - 1
-	if forward:
-		swap_hand = players[last_player_idx].hand
-		for n in range(last_player_idx, 0, -1):
-			players[n].hand = players[n - 1].hand
-		players[0].hand = swap_hand
-	else:
-		swap_hand = players[0].hand
-		for n in range(0, last_player_idx, 1):
-			players[n].hand = players[n + 1].hand
-		players[last_player_idx].hand = swap_hand
-	
+	hands = deque([player.hand for player in players])
+	hands.rotate(1 if forward else -1)
+	for hand, player in zip(hands, players):
+		player.hand = hand
+
 
 class PlayerInterface:
 	def get_name(self) -> str:
