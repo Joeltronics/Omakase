@@ -13,7 +13,7 @@ from tqdm import tqdm, trange
 
 from random_ai import RandomAI, RandomPlusAI, RandomPlusPlusAI
 from recursive_solver_ai import RecursiveSolverAI, LaterRecursiveAi
-from tunnel_vision_ai import TunnelVisionAI
+from present_value_based_ai import TunnelVisionAI
 
 from cards import Card
 from deck import Deck, get_deck_distribution

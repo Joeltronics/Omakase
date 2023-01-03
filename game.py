@@ -9,7 +9,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Union
 from cards import Card, Pick, card_names
 from deck import Deck, get_deck_distribution
 from player import CommonGameState, PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
-from tunnel_vision_ai import TunnelVisionAI
+from present_value_based_ai import TunnelVisionAI
 import scoring
 from utils import add_numbers_to_duplicate_names
 
