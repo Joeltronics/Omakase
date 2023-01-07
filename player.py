@@ -202,7 +202,7 @@ class PlayerState:
 		assert isinstance(card, Card)
 
 		if card not in self.hand:
-			raise ValueError(f'Cannot play card {card}, not in hand: {self.hand}')
+			raise ValueError(f'Player "{self.name}" cannot play card {card}, not in hand: {self.hand}')
 
 		self.hand.remove(card)
 

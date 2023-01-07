@@ -481,10 +481,10 @@ class RecursiveSolverAI(PlayerInterface):
 		return solve_recursive(player_state=player_state, verbose=verbose)
 
 
-class LaterRecursiveAi(PlayerInterface):
+class LaterRecursiveAI(PlayerInterface):
 	@staticmethod
 	def get_name() -> str:
-		return "LaterRecursiveAi"
+		return "LaterRecursiveAI"
 
 	def __init__(self, non_recursive_ai: PlayerInterface, max_recursive_hand_size: int = 3):
 		self.non_recursive_ai = non_recursive_ai

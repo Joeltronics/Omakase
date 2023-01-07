@@ -68,7 +68,7 @@ def _prune_likely_bad_picks(options: set[Card]) -> None:
 		options.discard(Card.Maki1)
 
 
-def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int, prune_likely_bad_picks=False) -> Set[Pick]:
+def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: Optional[int], prune_likely_bad_picks=False) -> Set[Pick]:
 
 	# There's no point to using chopsticks to take more chopsticks, so remove these first (before taking combinations)
 	# Except for odd case of 2 chopsticks, which we will add back later (after calculating combinations)
@@ -99,15 +99,15 @@ def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: int, prune_li
 				choices.add(Pick(*sorted((first_card, second_card))))
 
 	swapped_choices = set()
-	if num_unused_wasabi <= 1:
+	if (num_unused_wasabi is None) or (num_unused_wasabi <= 1):
 		for card_a, card_b in choices:
 			if card_a == card_b:
 				continue
-			if num_unused_wasabi == 1:
+			if (num_unused_wasabi is None) or (num_unused_wasabi == 1):
 				# If there's already 1 unused wasabi, then the order of 2 different nigiri matters
 				if card_a.is_nigiri() and card_b.is_nigiri() and card_a != card_b:
 					swapped_choices.add(Pick(card_b, card_a))
-			elif not num_unused_wasabi:
+			if not num_unused_wasabi:
 				# If no wasabi, then the order we play wasabi & nigiri matters
 				if (card_a == Card.Wasabi and card_b.is_nigiri()) or (card_a.is_nigiri() and card_b == Card.Wasabi):
 					swapped_choices.add(Pick(card_b, card_a))

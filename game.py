@@ -37,12 +37,11 @@ def get_num_cards_per_player(num_players: int) -> int:
 class Game:
 	def __init__(
 			self,
-			num_players=4,
+			players: Sequence[PlayerInterface],
 			num_rounds=3,
 			deck_dist=None,
 			num_cards_per_player=None,
 			omniscient=False,
-			players: Optional[Iterable[PlayerInterface]] = None,
 			player_names: Optional[Iterable[str]] = None,
 			verbose: bool = False,
 			pause_after_turn: bool = False,
@@ -51,10 +50,10 @@ class Game:
 		self.verbose = verbose
 		self.pause_after_turn = pause_after_turn
 
-		self._num_players = num_players
+		self._num_players = len(players)
 		self._num_rounds = num_rounds
 
-		self._num_cards_per_player = num_cards_per_player or get_num_cards_per_player(num_players)
+		self._num_cards_per_player = num_cards_per_player or get_num_cards_per_player(self._num_players)
 
 		if not deck_dist:
 			deck_dist = get_deck_distribution()
@@ -65,15 +64,15 @@ class Game:
 
 		if players is None:
 			self._print('Creating default AI')
-			self._players = [TunnelVisionAI() for _ in range(num_players)]
+			self._players = [TunnelVisionAI() for _ in range(self._num_players)]
 		elif isinstance(players, Sequence):
-			if len(players) != num_players:
+			if len(players) != self._num_players:
 				raise ValueError('Number of AI must match number of players')
 			self._players = players
 
 		if player_names is None:
 			player_names = [p.get_name() for p in self._players]
-		elif len(player_names) != num_players:
+		elif len(player_names) != self._num_players:
 			raise ValueError('Number of player names must match number of players')
 
 		player_names = add_numbers_to_duplicate_names(player_names)
@@ -82,7 +81,7 @@ class Game:
 		common_game_state = CommonGameState(
 			deck_count=sum(deck_dist.values()),
 			starting_deck_distribution=deck_dist,
-			num_players=num_players,
+			num_players=self._num_players,
 			num_rounds=num_rounds,
 			round_idx=0,
 			num_cards_per_player_per_round=self._num_cards_per_player,
@@ -105,7 +104,7 @@ class Game:
 			return
 		input('Press enter to continue...')
 
-	def play(self) -> Iterable[PlayerResult]:
+	def play(self) -> list[PlayerResult]:
 		self._print("Players: " + ", ".join([player.name for player in self._player_states]))
 		self._print()
 

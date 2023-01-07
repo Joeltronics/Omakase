@@ -62,12 +62,9 @@ def elo(
 def multiplayer_elo(
 		ranks: Sequence[int],
 		ratings: Sequence[Sequence],
-		num_prev_games: int,
+		num_prev_matchups: Sequence[int],
 		) -> List[float]:
-	"""
-	:param players: [(Previous rating, rank), ...]
-	:returns: [New rating, ...]
-	"""
+	""""""
 
 	"""
 	TODO: try this instead - same idea but only compare against players immediately above or below:
@@ -80,9 +77,8 @@ def multiplayer_elo(
 
 	new_ratings = []
 
-	# Each game is actually (n-1) Elo "games"
-	# TODO: this assumes the number of players was the same in every game
-	k = k_factor(num_games=((num_players - 1) * (1 + num_prev_games)))
+	min_num_prev_matchups = min(num_prev_matchups)
+	k = k_factor(num_games=((num_players - 1) * (1 + min_num_prev_matchups)))
 
 	for player_idx, (player_rank, player_rating) in enumerate(zip(ranks, ratings)):
 
