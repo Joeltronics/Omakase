@@ -2,6 +2,7 @@
 
 import argparse
 from collections.abc import Sequence
+import colorama
 from copy import copy
 from dataclasses import dataclass, field
 import itertools
@@ -23,8 +24,36 @@ from player import get_player_name
 from utils import add_numbers_to_duplicate_names, random_order_and_inverse
 
 
+RESET_ALL = colorama.Style.RESET_ALL
+
+
 def _bool_arg(val) -> bool:
 	return bool(int(val))
+
+
+
+@dataclass
+class PlayerMatchup:
+	num_games: int = 0
+	num_wins: int = 0
+	num_ties: int = 0
+
+	# Average rank in games including this player
+	# One case this can be useful (vs simple win rate) is cases where one AI has a strategy that generally
+	# works well but is vulnerable to blocking, and another AI is likely to block (but does much worse on average)
+	sum_rank: float = 0.0
+
+	@property
+	def num_losses(self) -> int:
+		return self.num_games - self.num_wins - self.num_ties
+
+	@property
+	def win_rate(self) -> Optional[float]:
+		return (self.num_wins + 0.5*self.num_ties) / self.num_games if self.num_games else None
+
+	@property
+	def avg_rank(self) -> Optional[float]:
+		return self.sum_rank / self.num_games if self.num_games else None
 
 
 @dataclass
@@ -32,12 +61,14 @@ class PlayerGameStats:
 	name: str
 	total_num_points: int = 0
 	margin_from_winner: int = 0
-	ranks: List[int] = field(default_factory=list)
-	normalized_ranks: Optional[List[int]] = field(default_factory=list)
+	ranks: list[int] = field(default_factory=list)
+	normalized_ranks: Optional[list[int]] = field(default_factory=list)
 
 	elo: float = DEFAULT_ELO
 	num_elo_matchups_played = 0
-	elo_history: Optional[List[int]] = None
+	elo_history: Optional[list[int]] = None
+
+	matchups: dict[str, PlayerMatchup] = field(default_factory=dict)
 
 
 def play_game(*,
@@ -161,14 +192,6 @@ def _process_results(
 
 	different_player_counts = len({len(result) for result in game_results}) > 1
 
-	"""
-	TODO: Add player matchup stats
-	- "win percentage over this player"
-	- Also "average rank in games including this player"
-	  - e.g. if one AI has a strategy that works great but is vulnerable to blocking, and another AI is prone to
-	    blocking, then that might not be reflected in the "win percentage over this player" stats
-	"""
-
 	# TODO: separate stats (at least Elo) per player count, in case one AI does better at a certain player count
 
 	# TODO: If there are multiple of the same AI, consolidate their stats
@@ -199,12 +222,15 @@ def _process_results(
 			player_stats.total_num_points += player_game_result.score
 			player_stats.margin_from_winner += margin
 
-			assert 1 <= player_game_result.rank <= num_players_this_game
-			player_stats.ranks.append(player_game_result.rank)
-			if player_stats.normalized_ranks is not None:
+			my_rank = player_game_result.rank
+
+			assert 1 <= my_rank <= num_players_this_game
+			player_stats.ranks.append(my_rank)
+			if player_stats.normalized_ranks is None:
+				normalized_rank = None
+			else:
 				# Ranks will be in range [1, N], convert to range [0, 1]
-				# FIXME: the resulting numbers don't seem correct, look into this
-				normalized_rank = (player_game_result.rank - 1) / (num_players_this_game - 1)
+				normalized_rank = (my_rank - 1) / (num_players_this_game - 1)
 				assert 0 <= normalized_rank <= 1
 				player_stats.normalized_ranks.append(normalized_rank)
 
@@ -213,28 +239,115 @@ def _process_results(
 			if player_stats.elo_history is not None:
 				player_stats.elo_history.append(new_elo)
 
+			for other_player_result in game_result:
+				if other_player_result == player_game_result:
+					continue
+
+				if other_player_result.name not in player_stats.matchups:
+					player_stats.matchups[other_player_result.name] = PlayerMatchup()
+
+				matchup = player_stats.matchups[other_player_result.name]
+
+				other_rank = other_player_result.rank
+				matchup.num_games += 1
+				if my_rank < other_rank:
+					matchup.num_wins += 1
+				elif my_rank == other_rank:
+					matchup.num_ties += 1
+
+				matchup.sum_rank += normalized_rank if (normalized_rank is not None) else my_rank
+
 	return list(player_game_stats_dict.values())
 
 
-def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int) -> None:
+def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int, print_full_matchups=False) -> None:
 
 	assert all(bool(p.normalized_ranks) == bool(player_game_stats[0].normalized_ranks) for p in player_game_stats[1:])
 
 	player_game_stats = sorted(player_game_stats, key = lambda pgs: pgs.elo, reverse=True)
+	num_players = len(player_game_stats)
 
 	print()
 	print(f'Results from {num_games} games')
+
 	print()
+	print('Summary:')
+	print()
+
 	# TODO: dynamic table column widths, in case of long player name or player with >= 10,000 wins
 	print(f'{"Player":<20} | {"Wins":^10} | Avg rank | Avg score | Avg margin | Elo')
 	print(f'{"-"*20} | {"-"*10} | {"-"*8} | {"-"*9} | {"-"*10} | {"-"*4}')
 	for player in player_game_stats:
+		player_num_games = len(player.ranks)
 		num_wins = sum(rank == 1 for rank in player.ranks)
-		pct_wins = num_wins / num_games * 100.0
-		avg_rank = sum(player.normalized_ranks if player.normalized_ranks else player.ranks) / num_games
-		avg_score = player.total_num_points / num_games
-		avg_margin = player.margin_from_winner / num_games
+		pct_wins = num_wins / player_num_games * 100.0
+		avg_rank = sum(player.normalized_ranks if player.normalized_ranks else player.ranks) / player_num_games
+		avg_score = player.total_num_points / player_num_games
+		avg_margin = player.margin_from_winner / player_num_games
 		print(f'{player.name:<20} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f} | {player.elo:>4.0f}')
+
+	print()
+	print('Matchups:')
+	print()
+
+	def _short_player_name(name: str) -> str:
+		name = name.replace('AI', '').replace('Ai', '')
+		name = ''.join([c for c in name if c.isalnum() and not c.islower()])
+		return f'{name:^5}'
+
+	print(f'{"Player":<20} | ' + ' | '.join(_short_player_name(p.name) for p in player_game_stats) + ' |')
+	separator = f'{"-"*20} | ' + ' | '.join(['-'*5 for _ in range(num_players)]) + ' |'
+	print(separator)
+	for player in player_game_stats:
+
+		matchups = [
+			(player.matchups[p.name] if p != player else None)
+			for p in player_game_stats
+		]
+
+		win_rates = [(m.win_rate if m is not None else None) for m in matchups]
+		wins = [(m.num_wins if m is not None else None) for m in matchups]
+		ties = [(m.num_ties if m is not None else None) for m in matchups]
+		losses = [(m.num_losses if m is not None else None) for m in matchups]
+		ranks = [(m.avg_rank if m is not None else None) for m in matchups]
+
+		def _win_rate_color(win_rate: Optional[float]) -> str:
+			if win_rate is None:
+				return RESET_ALL
+			assert 0.0 <= win_rate <= 1.0
+			if win_rate <= 0.2:
+				return colorama.Fore.RED
+			elif win_rate <= 0.4:
+				return colorama.Fore.YELLOW
+			elif win_rate <= 0.6:
+				return colorama.Style.RESET_ALL
+			elif win_rate <= 0.8:
+				return colorama.Fore.GREEN
+			else:
+				return colorama.Fore.BLUE
+
+		colors = [_win_rate_color(r) for r in win_rates]
+
+		def _fmt_val(val, pct) -> str:
+			if val is None:
+				return ' ' * 5
+			elif pct:
+				return f'{int(round(val*100)):3} %'
+			elif isinstance(val, int):
+				return f'{val:5}'
+			else:
+				return f'{val:5.2f}'
+
+		def _fmt_vals(vals, pct=False) -> list[str]:
+			return [color + _fmt_val(val, pct=pct) + RESET_ALL for color, val in zip(colors, vals)]
+
+		print(f'{player.name:<20} | ' + ' | '.join(_fmt_vals(win_rates, pct=True)) + ' |')
+		if print_full_matchups:
+			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(wins)) + ' |')
+			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(ties)) + ' |')
+			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(losses)) + ' |')
+		print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(ranks)) + ' |')
+		print(separator)
 
 
 def _plot_elo(plt, player_game_stats: Sequence[PlayerGameStats]) -> None:
