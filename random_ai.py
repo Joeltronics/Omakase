@@ -109,7 +109,7 @@ def _random_plus_pick_card(
 
 	# Dumplings: don't take if already maxed
 
-	if plate.dumplings >= 5:
+	if plate.dumplings >= 5 and Card.Dumpling in hand_maybes:
 		hand_maybes.discard(Card.Dumpling)
 		fallbacks.add(Card.Dumpling)
 

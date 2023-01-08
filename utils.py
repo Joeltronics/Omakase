@@ -37,6 +37,9 @@ def _prune_likely_bad_picks(options: set[Card]) -> None:
 	# 99% of the time there's no point taking a lower-value nigiri or maki if a higher value is available
 	# There could be very rare cases where it's advantageous to take a lower value, hence why this is optional
 
+	# Here we still allow taking cards that don't help us (e.g. Sashimi that's impossible to complete), because a) it
+	# might still be useful to block someone else, and b) we don't have enough information to know that anyway
+
 	if Card.SquidNigiri in options:
 		options.discard(Card.SalmonNigiri)
 		options.discard(Card.EggNigiri)
@@ -111,10 +114,13 @@ def get_all_picks(
 
 	if prune_likely_bad_picks:
 		if can_use_chopsticks and len(hand) <= (1 + plate.chopsticks) and (Card.Chopsticks not in hand):
-			# Don't bother including non-chopstick picks
+			# If this is the last time we can use these chopsticks, then no reason not to - don't bother including non-chopstick picks
 			options = set()
 		else:
 			options = {card for card in hand}
+			# Don't take chopsticks if we can't use them (unless they're the only option)
+			if len(hand) <= 1 + plate.chopsticks and len(options) > 1:
+				options.discard(Card.Chopsticks)
 			_prune_likely_bad_picks(options)
 			options = {Pick(card) for card in options}
 	else:

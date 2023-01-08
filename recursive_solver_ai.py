@@ -4,7 +4,6 @@ from collections import deque
 from collections.abc import Collection, Sequence
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
-from functools import total_ordering
 import itertools
 from math import copysign, factorial, sqrt
 from numbers import Real
@@ -32,7 +31,6 @@ PUDDING_TIEBREAKER_SCALE = (1.0 / 1024.0)
 SQRT_SCORE_DIFFERENTIAL = True
 
 
-@total_ordering
 @dataclass(frozen=True, order=True)
 class Result:
 
@@ -169,7 +167,7 @@ class _MinimalPlayerState:
 				hand.remove(card)  # raises ValueError if card not in hand
 				plate.add(card)
 				if card == Card.Pudding:
-					self.num_puddings[idx] += 1
+					ret.num_puddings[idx] += 1
 			if len(pick) == 2:
 				hand.append(Card.Chopsticks)
 
@@ -457,7 +455,9 @@ def solve_recursive(
 	# This is quite rare, so in most cases it's not worth the performance cost of considering these picks
 	# (Everything here is multiplicative, so even excluding just 1 option can make a good dent in the overall tree size)
 	prune_my_bad_picks = (num_players < 3) or (base_num_possibilities > 2000)
-	prune_others_bad_picks = (num_players < 3) or (base_num_possibilities > 200)
+
+	# TODO: when we have proper minimax, enable this for very low base_num_possibilities
+	prune_others_bad_picks = True
 
 	probablistic_scorer = ProbablisticScorer(player_state)
 

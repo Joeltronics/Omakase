@@ -148,15 +148,15 @@ class ProbablisticScorer:
 		Average number of puddings remaining to be seen: 3.5
 		First player
 
-		deltas:         [-1, 2, 0]
-		delta ranges:   [(-4.5, 2.5), (-1.5, 3.5), (-2.5, 2.5)]
-		zero crossings: [0.64 0.21, 0.5]
+		deltas:         [1, -2, 0]
+		delta ranges:   [(-2.5, 4.5), (-3.5, 1.5), (-2.5, 2.5)]
+		zero crossings: [0.36, 0.79, 0.5]
 
+		odds of last place: 0.36 * 0.79 * 0.5 = 14.2%
 		odds of first place: 0.64 * 0.21 * 0.5 = 6.7%
-		odds of last place: (1 - 0.64) * (1 - 0.21) * (1 - 0.5) = 0.46 * 0.79 * 0.5 = 18.2%
 
 		So average point value of this state:
-		6 * (0.067 - 0.182) = -0.69
+		6 * (0.067 - 0.142) = -0.45
 
 		=== Problems with this algorithm (TODO) ===
 
@@ -205,7 +205,7 @@ class ProbablisticScorer:
 		"""
 
 		delta_nums_puddings = [
-			num_puddings[player_idx] - other_pudding_count
+			other_pudding_count - num_puddings[player_idx]
 			for other_idx, other_pudding_count in enumerate(num_puddings)
 			if other_idx != player_idx
 		]
