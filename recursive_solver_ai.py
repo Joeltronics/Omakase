@@ -10,7 +10,7 @@ from math import copysign, factorial, sqrt
 from numbers import Real
 from typing import List, Literal, Optional, Tuple, Union
 
-from cards import Card, Pick, card_names
+from cards import Card, Pick, Plate, card_names
 from player import PlayerInterface, PlayerState
 from probablistic_scoring import ProbablisticScorer
 import scoring
@@ -125,7 +125,7 @@ PlayerState is pretty heavyweight, this is a lighter subset of info for use with
 class _MinimalPlayerState:
 	total_scores: list[int]
 	num_puddings: list[int]
-	plates: list[list[Card]]
+	plates: list[Plate]
 	hands: deque[deque[Card]]
 
 	def __post_init__(self):
@@ -164,10 +164,12 @@ class _MinimalPlayerState:
 
 		ret = deepcopy(self)
 
-		for pick, plate, hand in zip(picks, ret.plates, ret.hands):
+		for idx, (pick, plate, hand) in enumerate(zip(picks, ret.plates, ret.hands)):
 			for card in pick:
 				hand.remove(card)  # raises ValueError if card not in hand
-				plate.append(card)
+				plate.add(card)
+				if card == Card.Pudding:
+					self.num_puddings[idx] += 1
 			if len(pick) == 2:
 				hand.append(Card.Chopsticks)
 
@@ -185,8 +187,10 @@ class _MinimalPlayerState:
 		"""
 
 		assert all(len(h) == 1 for h in self.hands)
-		for plate, hand in zip(self.plates, self.hands):
-			plate.append(hand[0])
+		for idx, (plate, hand) in enumerate(zip(self.plates, self.hands)):
+			plate.add(hand[0])
+			if hand[0] == Card.Pudding:
+				self.num_puddings[idx] += 1
 
 		plate = self.plates[0]
 
@@ -194,7 +198,6 @@ class _MinimalPlayerState:
 
 		for idx in range(self.num_players):
 			self.total_scores[idx] += round_scores[idx]
-			self.num_puddings[idx] += count_card(self.plates[idx], Card.Pudding)
 
 		# TODO: will need to pass in opportunity cost of playing a pudding instead of another card once ProbablisticScorer implements it
 		# (Normally the recursive solver doesn't need to worry about opportunity costs, but this is different because it's for future rounds)
@@ -391,7 +394,7 @@ def solve_recursive(
 	if num_cards == 1:
 		return Pick(hand[0])
 
-	if (Card.Chopsticks not in player_state.plate) and len(set(hand)) == 1:
+	if (not player_state.plate.chopsticks) and len(set(hand)) == 1:
 		return Pick(hand[0])
 
 	num_players = 1 + len(player_state.other_player_states)

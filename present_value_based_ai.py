@@ -6,7 +6,7 @@ from numbers import Real
 from typing import Optional, Tuple, Union
 
 from player import PlayerInterface, PlayerState
-from cards import Card, Pick, card_names
+from cards import Card, Pick, Plate, card_names
 from utils import *
 import random
 
@@ -122,7 +122,7 @@ class CardPointsBreakdown:
 def _sashimi_avg_points(
 		num_cards_in_hand: int,
 		player_state: Optional[PlayerState] = None,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Optional[Plate] = None,
 		num_chopsticks: Optional[int] = None,
 		) -> CardPointsBreakdown:
 	if player_state is not None:
@@ -137,12 +137,12 @@ def _sashimi_avg_points(
 
 def _sashimi_avg_points_plate(*,
 		num_cards_in_hand: int,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Plate,
 		num_chopsticks: Optional[int] = None,
 		) -> CardPointsBreakdown:
 	assert num_cards_in_hand > 0
 
-	num_sashimi_needed = get_num_sashimi_needed(plate)
+	num_sashimi_needed = plate.num_sashimi_needed
 
 	num_cards_yet_to_see = num_cards_in_hand * (num_cards_in_hand - 1) // 2
 
@@ -192,16 +192,16 @@ def _sashimi_avg_points_full_state(
 		player_state: PlayerState,
 		num_chopsticks: Optional[int] = None,
 		) -> CardPointsBreakdown:
-	num_sashimi_needed = get_num_sashimi_needed(player_state.plate)
+	num_sashimi_needed = player_state.plate.num_sashimi_needed
 	if num_chopsticks is None:
-		num_chopsticks = count_card(player_state.plate, Card.Chopsticks)
+		num_chopsticks = player_state.plate.chopsticks
 	raise NotImplementedError()
 
 
 def _tempura_avg_points(
 		num_cards_in_hand: int,
 		player_state: Optional[PlayerState] = None,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Optional[Plate] = None,
 		) -> CardPointsBreakdown:
 	if player_state is not None:
 		return _tempura_avg_points_full_state(player_state)
@@ -215,14 +215,14 @@ def _tempura_avg_points(
 
 def _tempura_avg_points_plate(*,
 		num_cards_in_hand: int,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Plate,
 		) -> CardPointsBreakdown:
 
 	# TODO: use player_state, if provided
 
 	assert num_cards_in_hand > 0
 
-	num_tempura_needed = get_num_tempura_needed(plate)
+	num_tempura_needed = plate.num_tempura_needed
 	num_cards_yet_to_see = num_cards_in_hand * (num_cards_in_hand - 1) // 2
 
 	if num_tempura_needed > num_cards_in_hand:
@@ -237,9 +237,12 @@ def _tempura_avg_points_plate(*,
 		avg_future_points =  (5/2) * min(1.0, avg_num_tempura_yet_to_see)
 		return CardPointsBreakdown(avg_future_points=avg_future_points)
 
+	else:
+		assert False, f"{num_tempura_needed=}"
+
 
 def _tempura_avg_points_full_state(player_state: PlayerState) -> CardPointsBreakdown:
-	num_tempura_needed = get_num_tempura_needed(player_state.plate)
+	num_tempura_needed = player_state.plate.num_tempura_needed
 	raise NotImplementedError()
 
 
@@ -410,7 +413,7 @@ def _maki_avg_points_full_state(card: Card, player_state: PlayerState) -> CardPo
 def _dumpling_avg_points(*,
 		num_cards_in_hand: int,
 		player_state: Optional[PlayerState] = None,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Optional[Plate] = None,
 		) -> CardPointsBreakdown:
 
 	if player_state is not None:
@@ -424,10 +427,10 @@ def _dumpling_avg_points(*,
 
 def _dumpling_avg_points_plate(
 		num_cards_in_hand: int,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Plate,
 		) -> CardPointsBreakdown:
 
-	n_dumpling = count_card(plate, Card.Dumpling)
+	n_dumpling = plate.dumplings
 
 	# If already 5 dumplings, there's no point taking any more
 	if n_dumpling >= 5:
@@ -570,7 +573,7 @@ def _avg_points_not_counting_blocking(
 		num_cards: int,
 		num_players: int,
 		player_state: Optional[PlayerState] = None,
-		plate: Optional[Sequence[Card]] = None,
+		plate: Optional[Plate] = None,
 		num_unused_wasabi: Optional[int] = None,
 		num_chopsticks: Optional[int] = None,
 		) -> CardPointsBreakdown:
@@ -605,7 +608,7 @@ def _avg_points_not_counting_blocking(
 def _card_avg_points(
 		card: Card,
 		*,
-		plate: Optional[Sequence[Card]],
+		plate: Optional[Plate],
 		num_cards: int,
 		num_players: int,
 		num_unused_wasabi: Optional[int],
@@ -647,7 +650,7 @@ def _card_avg_points(
 def _pair_avg_points(
 		cards: Tuple[Card, Card],
 		*,
-		plate: Optional[Sequence[Card]],
+		plate: Optional[Plate],
 		num_cards: int,
 		num_players: int,
 		num_unused_wasabi: int,
@@ -693,7 +696,11 @@ def _pair_avg_points(
 		player_state=player_state,
 	)
 
-	plate_after = list(plate) + [card1] if (plate is not None) else None
+	if plate is not None:
+		plate_after = copy(plate)
+		plate_after.add(card1)
+	else:
+		plate_after = None
 
 	if card1 == Card.Wasabi:
 		num_unused_wasabi += 1
@@ -741,8 +748,6 @@ class HandOnlyAI(PlayerInterface):
 		self.chopstick_opportunity_cost = chopstick_opportunity_cost
 
 	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
-		has_chopsticks = Card.Chopsticks in player_state.plate
-		has_wasabi = Card.Wasabi in player_state.plate
 		return tunnel_vision_play_turn(
 			hand = player_state.hand,
 			plate = None,
@@ -751,8 +756,8 @@ class HandOnlyAI(PlayerInterface):
 			opportunity_cost_scale=self.opportunity_cost_scale,
 			always_take_chopsticks=self.always_take_chopsticks,
 			chopstick_opportunity_cost=self.chopstick_opportunity_cost,
-			has_chopsticks=has_chopsticks,
-			has_wasabi=has_wasabi,
+			has_chopsticks=bool(player_state.plate.chopsticks),
+			has_wasabi=bool(player_state.plate.unused_wasabi),
 			verbose=verbose,
 		)
 
@@ -795,7 +800,7 @@ class TunnelVisionAI(PlayerInterface):
 
 def tunnel_vision_play_turn(*,
 		hand: Sequence[Card],
-		plate: Optional[Sequence[Card]],
+		plate: Optional[Plate],
 		num_players: int,
 		blocking_point_scale: float = DEFAULT_BLOCKING_POINT_SCALE,
 		opportunity_cost_scale: float = 1.0,
@@ -813,8 +818,8 @@ def tunnel_vision_play_turn(*,
 		return Pick(hand[0])
 
 	if plate is not None:
-		num_chopsticks = count_card(plate, Card.Chopsticks)
-		num_unused_wasabi = get_num_unused_wasabi(plate)
+		num_chopsticks = plate.chopsticks
+		num_unused_wasabi = plate.unused_wasabi
 	else:
 		if has_chopsticks is None or has_wasabi is None:
 			raise ValueError('Must provide has_chopsticks & has_wasabi if plate is None')

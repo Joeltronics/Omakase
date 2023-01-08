@@ -4,7 +4,7 @@ from collections import namedtuple
 from collections.abc import Sequence
 from typing import List, Union
 
-from cards import Card
+from cards import Card, Plate
 import cards
 from player import PlayerState
 from utils import *
@@ -82,28 +82,59 @@ def score_plate_besides_maki_pudding(plate: Sequence[Card]) -> int:
 	return score
 
 
-def score_plates(plates: Sequence[Sequence[Card]]) -> list[int]:
+def _check_plate(player: PlayerState) -> None:
+	"""
+	Sanity check that player.plate matches what's in player.play_history
+	"""
 
-	nums_maki = [count_maki(plate) for plate in plates]
+	# Reconstruct plate as sequence
+	reconstructed_plate = []
+	for pick in player.play_history:
+		if len(pick) == 2:
+			if Card.Chopsticks not in reconstructed_plate:
+				raise ValueError(f'Invalid play history: {player.play_history}')
+			reconstructed_plate.remove(Card.Chopsticks)
+		for card in pick:
+			reconstructed_plate.append(card)
 
-	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = _count_maki_plates(nums_maki)
+	# Check the values that are needed for scoring
+	expected_score = score_plate_besides_maki_pudding(reconstructed_plate)
+	assert expected_score == player.plate.score, f'{reconstructed_plate=} {expected_score=} {player.plate.score=}'
 
-	def _score_plate_including_maki(plate, num_maki):
-		round_score = score_plate_besides_maki_pudding(plate)
+	assert count_maki(reconstructed_plate) == player.plate.maki, f'{reconstructed_plate=} {count_maki(reconstructed_plate)=} {player.plate.maki=}'
 
+
+def score_plates(plates_or_players: Union[Sequence[PlayerState], Sequence[Plate]], /) -> list[int]:
+
+	if not plates_or_players:
+		return []
+	elif isinstance(plates_or_players[0], PlayerState):
+		players = plates_or_players
+		for player in players:
+			_check_plate(player)
+		plates = [player.plate for player in players]
+	else:
+		assert isinstance(plates_or_players[0], Plate)
+		plates = plates_or_players
+
+	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = _count_maki_plates(
+		[plate.maki for plate in plates]
+	)
+
+	def _score_maki(num_maki: int):
 		if num_maki == max_maki_count:
-			round_score += points_most_maki
+			return points_most_maki
 		elif num_maki == second_maki_count:
-			round_score += points_second_most_maki
-		
-		return round_score
+			return points_second_most_maki
+		else:
+			return 0
 
-	return [_score_plate_including_maki(plate, num_maki) for plate, num_maki in zip(plates, nums_maki)]
+	return [plate.score + _score_maki(plate.maki) for plate in plates]
 
 
 def score_round_players(players: Sequence[PlayerState], print_it=True):
 
-	plate_scores = score_plates([p.plate for p in players])
+	plate_scores = score_plates(players)
 
 	# TODO: maybe print Maki counts, and separate breakdown of points from Maki?
 	if print_it:

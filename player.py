@@ -8,7 +8,7 @@ import random
 from typing import Optional, List, Iterable, Union
 
 from utils import *
-from cards import Card, Pick, sort_cards, card_names, dict_card_names
+from cards import Card, Pick, Plate, sort_cards, card_names, dict_card_names
 
 use_named_players = False
 
@@ -71,8 +71,8 @@ class CommonGameState:
 @dataclass
 class PublicPlayerState:
 	name: str
-	plate: list[Card] = field(default_factory=list)
-	play_history: list[Pick] = field(default_factory=list)  # History of cards played this round (would be identical to self.plate without chopsticks/pudding)
+	plate: Plate = field(default_factory=Plate)
+	play_history: list[Pick] = field(default_factory=list)  # History of cards played this round
 	total_score: int = 0
 	num_pudding: int = 0
 
@@ -126,7 +126,7 @@ class PlayerState:
 		return self.num_unseen_dealt_cards > 0
 
 	@property
-	def plate(self) -> Sequence[Card]:
+	def plate(self) -> Plate:
 		return self.public_states[0].plate
 
 	@property
@@ -188,10 +188,9 @@ class PlayerState:
 		if len(self.hand) < 2:
 			raise ValueError('Cannot play chopsticks, only 1 card left in hand')
 
-		try:
-			self.plate.remove(Card.Chopsticks)
-		except ValueError as ex:
-			raise ValueError('No chopsticks on plate, cannot play 2 cards!') from ex
+		if not self.plate.chopsticks:
+			raise ValueError('No chopsticks on plate, cannot play 2 cards!')
+		self.plate.chopsticks -= 1
 
 		self._play_card(card1)
 		self._play_card(card2)
@@ -205,10 +204,7 @@ class PlayerState:
 			raise ValueError(f'Player "{self.name}" cannot play card {card}, not in hand: {self.hand}')
 
 		self.hand.remove(card)
-
-		# Have to still add to plate
-		# TODO: don't put puddings on plate
-		self.plate.append(card)
+		self.plate.add(card)
 
 		if card == Card.Pudding:
 			self.public_state.num_pudding += 1
@@ -237,7 +233,7 @@ class PlayerState:
 		for state in self.other_player_states:
 			new_state = players[state.name]
 
-			state.plate = deepcopy(new_state.plate)
+			state.plate = copy(new_state.plate)
 			state.play_history = deepcopy(new_state.play_history)
 
 			last_play = state.play_history[-1]
@@ -355,23 +351,25 @@ class PlayerState:
 		eol = ' |\n'
 
 		s += f'{"Name:":<10}' + sep + sep.join([f'{s.name:^20}' for s in self.public_states]) + eol
-		s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score:>20}' for s in self.public_states]) + eol
+		# s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score:>20}' for s in self.public_states]) + eol
+		s += f'{"Score:":<10}' + sep + sep.join([f'{s.total_score + s.plate.score:>20}' for s in self.public_states]) + eol
 		s += f'{"Pudding:":<10}' + sep + sep.join([f'{s.num_pudding:>20}' for s in self.public_states]) + eol
 
-		# Plates may have different length due to puddings
-		max_plate_len = max(len(s.plate) for s in self.public_states)
+		s += 'Plate:\n'
+		# s += f'{"Score:":10}' + sep + sep.join([f'{s.plate.score:20}' for s in self.public_states]) + eol
 
-		if max_plate_len:
-			s += 'Plate:\n'
-			for idx in range(max_plate_len):
-				s += f'{"":10}' + sep + sep.join([
-					f'{s.plate[idx]:20}' if idx <= len(s.plate) else ' ' * 20
-					for s in self.public_states
-				]) + eol
-		else:
-			s += 'Plate: [all empty]\n'
-
-		# TODO: show current plate score
+		if any(s.plate.maki for s in self.public_states):
+			s += f'{"Maki:":10}' + sep + sep.join([f'{s.plate.maki:20}' for s in self.public_states]) + eol
+		if any(s.plate.chopsticks for s in self.public_states):
+			s += f'{"Chop:":10}' + sep + sep.join([f'{s.plate.chopsticks:20}' for s in self.public_states]) + eol
+		if any(s.plate.unused_wasabi for s in self.public_states):
+			s += f'{"Wasabi:":10}' + sep + sep.join([f'{s.plate.unused_wasabi:20}' for s in self.public_states]) + eol
+		if any(s.plate.unscored_sashimi for s in self.public_states):
+			s += f'{"Sashimi:":10}' + sep + sep.join([f'{s.plate.unscored_sashimi:20}' for s in self.public_states]) + eol
+		if any(s.plate.unscored_tempura for s in self.public_states):
+			s += f'{"Tempura:":10}' + sep + sep.join([f'{int(s.plate.unscored_tempura):20}' for s in self.public_states]) + eol
+		if any(s.plate.dumplings for s in self.public_states):
+			s += f'{"Dumplings:":10}' + sep + sep.join([f'{s.plate.dumplings:20}' for s in self.public_states]) + eol
 
 		# TODO: show play history?
 

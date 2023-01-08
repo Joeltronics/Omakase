@@ -7,7 +7,7 @@ import itertools
 import random
 from typing import Tuple, List, Optional, Set
 
-from cards import Card, Pick
+from cards import Card, Pick, Plate
 
 
 FLOAT_EPSILON = 1e-6
@@ -22,24 +22,6 @@ def count_card(cards: Iterable[Card], card: Card) -> int:
 		return cards.count(card)
 	else:
 		return sum(c == card for c in cards)
-
-
-def get_num_unused_wasabi(plate: Sequence[Card]) -> int:
-	n = 0
-	for card in plate:
-		if card == Card.Wasabi:
-			n += 1
-		elif n > 0 and card.is_nigiri():
-			n -= 1
-	return n
-
-
-def get_num_sashimi_needed(plate: Collection[Card]) -> int:
-	return 3 - (count_card(plate, Card.Sashimi) % 3)
-
-
-def get_num_tempura_needed(plate: Collection[Card]) -> int:
-	return 2 - (count_card(plate, Card.Tempura) % 2)
 
 
 def random_order_and_inverse(num_players) -> Tuple[List[int], List[int]]:
@@ -121,15 +103,14 @@ def get_chopstick_picks(hand: Collection[Card], num_unused_wasabi: Optional[int]
 
 def get_all_picks(
 		hand: Collection[Card],
-		plate: Sequence[Card],
+		plate: Plate,
 		prune_likely_bad_picks = False,
 		) -> Set[Pick]:
 
-	num_chopsticks = count_card(plate, Card.Chopsticks)
-	can_use_chopsticks = num_chopsticks and len(hand) > 1
+	can_use_chopsticks = plate.chopsticks and len(hand) > 1
 
 	if prune_likely_bad_picks:
-		if can_use_chopsticks and len(hand) <= (1 + num_chopsticks) and (Card.Chopsticks not in hand):
+		if can_use_chopsticks and len(hand) <= (1 + plate.chopsticks) and (Card.Chopsticks not in hand):
 			# Don't bother including non-chopstick picks
 			options = set()
 		else:
@@ -141,7 +122,7 @@ def get_all_picks(
 
 	if can_use_chopsticks:
 		options |= get_chopstick_picks(
-			hand, num_unused_wasabi=get_num_unused_wasabi(plate), prune_likely_bad_picks=prune_likely_bad_picks)
+			hand, num_unused_wasabi=plate.unused_wasabi, prune_likely_bad_picks=prune_likely_bad_picks)
 
 	assert options
 	return options

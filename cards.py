@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from enum import IntEnum, unique
 from typing import Any, Dict, Iterable, List, Literal, Union, Tuple, Optional
@@ -70,6 +71,16 @@ class Card(IntEnum):
 		elif self == Card.Maki2:
 			return 2
 		elif self == Card.Maki3:
+			return 3
+		else:
+			return None
+
+	def nigiri_base_points(self) -> Optional[Literal[1, 2, 3]]:
+		if self == Card.EggNigiri:
+			return 1
+		elif self == Card.SalmonNigiri:
+			return 2
+		elif self == Card.SquidNigiri:
 			return 3
 		else:
 			return None
@@ -180,7 +191,127 @@ class Pick(Sequence[Card]):
 		return f'Pick(a={self._a}, b={self._b}, order_may_matter={self.order_may_matter})'
 
 
-def card_names(cards: Iterable[Union[Card, Tuple[Card, Card], Pick]], sort=False, short=False) -> str:
+# TODO: python 3.10 slots=True
+@dataclass
+class Plate:
+	score: int = 0
+	maki: int = 0
+	chopsticks: int = 0
+	unused_wasabi: int = 0
+	unscored_sashimi: int = 0
+	unscored_tempura: bool = False
+	dumplings: int = 0
+
+	@property
+	def num_sashimi_needed(self) -> Literal[1, 2, 3]:
+		return [3, 2, 1][self.unscored_sashimi]
+
+	@property
+	def num_tempura_needed(self) -> Literal[1, 2]:
+		return 1 if self.unscored_tempura else 2
+
+	def clear(self) -> None:
+		self.score = 0
+		self.maki = 0
+		self.chopsticks = 0
+		self.unused_wasabi = 0
+		self.unscored_sashimi = 0
+		self.unscored_tempura = False
+		self.dumplings = 0
+
+	def __bool__(self) -> bool:
+		# self.dumplings is excluded, since if this is nonzero, score would be nonzero too
+		return self.score or self.maki or self.chopsticks or self.unused_wasabi or self.unscored_sashimi or self.unscored_tempura
+
+	def __str__(self) -> str:
+		
+		vals = []
+
+		if self.score:
+			vals.append(f'{self.score} scored points')
+
+		if self.maki:
+			vals.append(f'{self.maki} Maki')
+
+		if self.chopsticks:
+			vals.append(f'{self.chopsticks} Chopsticks')
+
+		if self.unused_wasabi:
+			vals.append(f'{self.unused_wasabi} unused Wasabi')
+
+		if self.unscored_sashimi:
+			vals.append(f'{self.unscored_sashimi} Sashimi')
+
+		if self.unscored_tempura:
+			vals.append('1 Tempura')
+
+		if self.dumplings:
+			vals.append(f'{self.dumplings} dumplings (scored)')
+
+		return '[' + ', '.join(vals) + ']'
+
+	def add(self, card: Card) -> None:
+		if card == Card.Chopsticks:
+			self.chopsticks += 1
+
+		elif card == Card.Wasabi:
+			self.unused_wasabi += 1
+
+		elif card == Card.Sashimi:
+			if self.unscored_sashimi == 2:
+				self.score += 10
+				self.unscored_sashimi = 0
+			else:
+				self.unscored_sashimi += 1
+
+		elif card == Card.Tempura:
+			if self.unscored_tempura:
+				self.score += 5
+			self.unscored_tempura = not self.unscored_tempura
+
+		elif card == Card.Dumpling:
+			assert 0 <= self.dumplings <= 5
+			if self.dumplings >= 5:
+				return
+			self.score += 1 + self.dumplings
+			self.dumplings += 1
+
+		elif card.is_nigiri():
+			points = card.nigiri_base_points()
+			assert points is not None
+			if self.unused_wasabi:
+				self.unused_wasabi -= 1
+				points *= 3
+			self.score += points
+
+		elif card.is_maki():
+			num_maki = card.num_maki()
+			assert num_maki is not None
+			self.maki += num_maki
+
+		elif card == Card.Pudding:
+			pass  # Ignore puddings
+
+		else:
+			raise ValueError(f'Invalid card: {card}')
+
+	def play(self, pick: Pick) -> None:
+		if len(pick) == 2:
+			if not self.chopsticks:
+				raise ValueError('Cannot play 2 cards without chopsticks on plate!')
+			self.chopsticks -= 1
+		for card in pick:
+			self.add(card)
+
+
+def card_names(
+		cards: Union[Plate, Iterable[Union[Card, Tuple[Card, Card], Pick]]],
+		sort=False,
+		short=False,
+		) -> str:
+
+	if isinstance(cards, Plate):
+		return str(cards)
 
 	if isinstance(cards, (set, frozenset)):
 		start_chr = '{'

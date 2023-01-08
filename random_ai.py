@@ -7,7 +7,7 @@ import random
 from typing import Union, Tuple
 
 from player import PlayerInterface, PlayerState
-from cards import Card, Pick, card_names
+from cards import Card, Pick, Plate, card_names
 from utils import *
 
 
@@ -21,7 +21,7 @@ class RandomAI(PlayerInterface):
 		hand = player_state.hand
 		assert len(hand) > 0
 
-		can_use_chopsticks = Card.Chopsticks in player_state.plate and len(hand) >= 2
+		can_use_chopsticks = player_state.plate.chopsticks and len(hand) >= 2
 		use_chopsticks = can_use_chopsticks and random_bool()
 
 		if use_chopsticks:
@@ -41,44 +41,39 @@ class _RandomPickState(IntEnum):
 
 
 def _random_plus_pick_card(
-		plate: Sequence[Card],
-		hand: Collection[Card],
+		plate: Plate,
+		hand: Sequence[Card],
 		verbose=False,
 		take_obvious_picks=True,
 		) -> Tuple[Card, _RandomPickState]:
 
 	n_cards = len(hand)
 	assert n_cards > 0
+
 	hand_maybes = set(hand)
 	fallbacks = set(hand)  # Cards that aren't useful to us, but could at least block someone else
-
-	num_sashimi_needed = get_num_sashimi_needed(plate)
-	num_tempura_needed = get_num_tempura_needed(plate)
-	num_dumplings = count_card(plate, Card.Dumpling)
-	num_chopsticks = count_card(plate, Card.Chopsticks)
-	num_unused_wasabi = get_num_unused_wasabi(plate)
 
 	# Handle certain great combos we should always grab if we can
 
 	if take_obvious_picks:
-		if num_sashimi_needed == 1 and Card.Sashimi in hand_maybes:
+		if plate.num_sashimi_needed == 1 and Card.Sashimi in hand_maybes:
 			return Card.Sashimi, _RandomPickState.great  # 10 points
 
-		if num_unused_wasabi and Card.SquidNigiri in hand_maybes:
+		if plate.unused_wasabi and Card.SquidNigiri in hand_maybes:
 			return Card.SquidNigiri, _RandomPickState.great  # 9 points
 
-		if num_dumplings == 4 and Card.Dumpling in hand_maybes:
+		if plate.dumplings == 4 and Card.Dumpling in hand_maybes:
 			return Card.Dumpling, _RandomPickState.great  # 6 points
 
-		# if num_unused_wasabi and Card.SalmonNigiri in hand_maybes:
+		# if plate.unused_wasabi and Card.SalmonNigiri in hand_maybes:
 		# 	return Card.SalmonNigiri, _RandomPickState.great  # 6 points
 
-		# if num_tempura_needed == 1 and Card.Tempura in hand_maybes:
+		# if plate.num_tempura_needed == 1 and Card.Tempura in hand_maybes:
 		# 	return Card.Tempura, _RandomPickState.great  # 5 points
 
 	# Chopsticks: don't take if can't use
 
-	if n_cards <= 2 + num_chopsticks:
+	if n_cards <= 2 + plate.chopsticks:
 		hand_maybes.discard(Card.Chopsticks)
 
 	# Maki: don't take lower value
@@ -102,19 +97,19 @@ def _random_plus_pick_card(
 
 	# Sashimi: don't take if impossible to complete set (based only on number of cards left)
 
-	if num_sashimi_needed > n_cards and Card.Sashimi in hand_maybes:
+	if plate.num_sashimi_needed > n_cards and Card.Sashimi in hand_maybes:
 		hand_maybes.discard(Card.Sashimi)
 		fallbacks.add(Card.Sashimi)
 
 	# Tempura: don't take if impossible to complete set (based only on number of cards left)
 
-	if num_tempura_needed > n_cards and Card.Tempura in hand_maybes:
+	if plate.num_tempura_needed > n_cards and Card.Tempura in hand_maybes:
 		hand_maybes.discard(Card.Tempura)
 		fallbacks.add(Card.Tempura)
 
 	# Dumplings: don't take if already maxed
 
-	if num_dumplings >= 5:
+	if plate.dumplings >= 5:
 		hand_maybes.discard(Card.Dumpling)
 		fallbacks.add(Card.Dumpling)
 
@@ -150,7 +145,7 @@ def _random_plus_pick_cards(
 
 	plate = player_state.plate
 
-	num_chopsticks = count_card(plate, Card.Chopsticks)
+	num_chopsticks = plate.chopsticks
 
 	can_use_chopsticks = num_chopsticks and len(hand) > 1
 	should_use_chopsticks = can_use_chopsticks and len(hand) <= (1 + num_chopsticks)
@@ -159,13 +154,13 @@ def _random_plus_pick_cards(
 	if take_obvious_picks and can_use_chopsticks:
 		hand_count = Counter(hand)
 
-		if Card.Sashimi in hand_count and hand_count[Card.Sashimi] >= 2 and get_num_sashimi_needed(plate) == 2:
+		if Card.Sashimi in hand_count and hand_count[Card.Sashimi] >= 2 and plate.num_sashimi_needed == 2:
 			return Pick(Card.Sashimi, Card.Sashimi)  # 10 points
 
-		if Card.Wasabi in hand and Card.SquidNigiri in hand and not get_num_unused_wasabi(plate):
+		if Card.Wasabi in hand and Card.SquidNigiri in hand and not plate.unused_wasabi:
 			return Pick(Card.Wasabi, Card.SquidNigiri)  # 9 points
 
-		if Card.Dumpling in hand_count and hand_count[Card.Dumpling] >= 2 and count_card(plate, Card.Dumpling) == 3:
+		if Card.Dumpling in hand_count and hand_count[Card.Dumpling] >= 2 and plate.dumplings == 3:
 			return Pick(Card.Dumpling, Card.Dumpling)  # 9 points
 		
 		# TOOD: wasabi-salmon? 2 tempura? 2 sashimi when num_sashimi_needed == 3?
@@ -183,9 +178,10 @@ def _random_plus_pick_cards(
 
 		# Pick possible 2nd card
 
-		plate_after = list(plate)
+		plate_after = copy(plate)
+		plate_after.add(card1)
+
 		hand_after = list(hand)
-		plate_after.append(card1)
 		hand_after.remove(card1)
 
 		card2, card2_state = _random_plus_pick_card(
