@@ -24,6 +24,10 @@ def count_card(cards: Iterable[Card], card: Card) -> int:
 		return sum(c == card for c in cards)
 
 
+def count_maki(cards: Iterable[Card]) -> int:
+	return sum(card.num_maki() for card in cards)
+
+
 def random_order_and_inverse(num_players) -> Tuple[List[int], List[int]]:
 	order = list(range(num_players))
 	random.shuffle(order)
@@ -153,6 +157,18 @@ def add_numbers_to_duplicate_names(player_names: Sequence[str]) -> List[str]:
 		raise ValueError(f'Invalid player names: {player_names}')
 
 	return ret
+
+
+def container_to_str(container, /, item_format='{}', *, type=None) -> str:
+
+	if isinstance(container, (set, frozenset)):
+		start_chr = '{'
+		end_chr = '}'
+	else:
+		start_chr = '['
+		end_chr = ']'
+
+	return start_chr + ', '.join(item_format.format(type(val) if type is not None else val) for val in container) + end_chr
 
 
 def _test():

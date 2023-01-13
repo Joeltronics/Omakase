@@ -14,7 +14,7 @@ from tqdm import tqdm, trange
 
 from random_ai import RandomAI, RandomPlusAI, RandomPlusPlusAI
 from recursive_solver_ai import RecursiveSolverAI, LaterRecursiveAI
-from present_value_based_ai import HandOnlyAI, TunnelVisionAI
+from present_value_based_ai import HandOnlyAI, TunnelVisionAI, BasicPresentValueAI
 
 from cards import Card
 from deck import Deck, get_deck_distribution
@@ -153,9 +153,11 @@ def _setup_players(args):
 		if args.omniscient:
 			ai_class_constructors.append(RecursiveSolverAI)
 		else:
-			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=TunnelVisionAI()))
+			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=BasicPresentValueAI()))
+			# ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=TunnelVisionAI()))
 
 	ai_class_constructors += [
+		BasicPresentValueAI,
 		TunnelVisionAI,
 		RandomPlusPlusAI,
 		RandomPlusAI,
@@ -291,7 +293,7 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 	print()
 
 	def _short_player_name(name: str) -> str:
-		name = name.replace('AI', '').replace('Ai', '')
+		name = name.replace('AI', '').replace('Ai', '').replace('Bot', '').replace('BOT', '')
 		name = ''.join([c for c in name if c.isalnum() and not c.islower()])
 		return f'{name:^5}'
 
@@ -442,6 +444,7 @@ def main():
 
 	players, player_names = _setup_players(args)
 	print(f'{len(player_names)} Players: ' + ', '.join(player_names))
+	# TODO: also print if will randomize selected players and/or player count per game
 
 	deck_dist = _get_deck_distribution(args)
 

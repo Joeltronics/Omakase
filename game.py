@@ -115,7 +115,7 @@ class Game:
 			round_pass_forward = (round_idx % 2 == 0)
 
 			if self._num_rounds > 1:
-				self._print('==== Round %i/%i =====' % (round_idx+1, self._num_rounds))
+				self._print('\n\n\n==== Round %i/%i =====' % (round_idx+1, self._num_rounds))
 
 			hands = self._deck.deal_hands(self._num_players, self._num_cards_per_player)
 
@@ -130,9 +130,9 @@ class Game:
 
 			for turn_idx in range(self._num_cards_per_player):
 				if self._num_rounds > 1:
-					self._print('--- Round %i/%i, Turn %i/%i ---' % (round_idx + 1, self._num_rounds, turn_idx + 1, self._num_cards_per_player))
+					self._print('\n\n\n--- Round %i/%i, Turn %i/%i ---' % (round_idx + 1, self._num_rounds, turn_idx + 1, self._num_cards_per_player))
 				else:
-					self._print('--- Turn %i/%i ---' % (turn_idx + 1, self._num_cards_per_player))
+					self._print('\n\n\n--- Turn %i/%i ---' % (turn_idx + 1, self._num_cards_per_player))
 				self._print()
 				self._play_turn(pass_forward=round_pass_forward)
 				self._pause()
@@ -141,7 +141,7 @@ class Game:
 
 			self._print('Scores after round:')
 			for player in self._player_states:
-				self._print("\t%s: %i, %i pudding" % (player.name, player.total_score, player.num_pudding))
+				self._print(f"\t{player.name + ':':24s} {player.total_score}, {player.num_pudding} pudding")
 			self._print()
 
 			self._pause()
@@ -174,6 +174,8 @@ class Game:
 				self._print("State:")
 				self._print(state.dump())
 
+			# deepcopy state to prevent player from accidentally "cheating" by modifying it
+			# TODO: if only 1 card, don't even bother with play_turn()
 			# TODO: dump full state if this or state.play_turn() throws an exception
 			pick = player.play_turn(deepcopy(state), verbose=verbose)
 

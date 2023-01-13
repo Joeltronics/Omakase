@@ -4,6 +4,7 @@ from collections import deque
 from collections.abc import Collection, Sequence
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
+from enum import IntEnum, unique
 import itertools
 from math import copysign, factorial, sqrt
 from numbers import Real
@@ -13,7 +14,7 @@ from cards import Card, Pick, Plate, card_names
 from player import PlayerInterface, PlayerState
 from probablistic_scoring import ProbablisticScorer
 import scoring
-from utils import count_card, get_all_picks
+from utils import container_to_str, count_card, get_all_picks
 
 
 # Pudding count is tiebreaker, so your actual "score" for rank purposes is a tuple of (points, puddings)
@@ -29,6 +30,19 @@ PUDDING_TIEBREAKER_SCALE = (1.0 / 1024.0)
 # 1 point difference to someone 20 points behind
 # So use square root of score difference instead
 SQRT_SCORE_DIFFERENTIAL = True
+
+
+@unique
+class Verbosity(IntEnum):
+	silent = 0
+	verbose = 1
+	extra_verbose = 2
+	extra_verbose_recursive = 3
+
+
+VERBOSITY = Verbosity.verbose
+# VERBOSITY = Verbosity.extra_verbose
+# VERBOSITY = Verbosity.extra_verbose_recursive
 
 
 @dataclass(frozen=True, order=True)
@@ -49,6 +63,9 @@ class Result:
 	# def __post_init__(self):
 	# 	if self.neg_rank >= 0:
 	# 		raise ValueError(f'neg_rank must be negative! ({self.neg_rank})')
+
+	def __str__(self) -> str:
+		return f'Result(rank={-self.neg_rank:.2g}, score_differential={self.score_differential:+.3f}, score_total={self.score_total:.3f})'
 
 	def __add__(self, other) -> 'Result':
 		return Result(
@@ -179,13 +196,17 @@ class _MinimalPlayerState:
 			self,
 			probablistic_scorer: ProbablisticScorer,
 			sqrt_score_differential=SQRT_SCORE_DIFFERENTIAL,
+			verbose: bool = False,
+			indent: str = '',
 			) -> Result:
 		"""
 		:note: Invalidates this object
 		"""
 
-		assert all(len(h) == 1 for h in self.hands)
+		assert self.hands[0] is not self.hands[-1]
+
 		for idx, (plate, hand) in enumerate(zip(self.plates, self.hands)):
+			assert len(hand) == 1
 			plate.add(hand[0])
 			if hand[0] == Card.Pudding:
 				self.num_puddings[idx] += 1
@@ -199,7 +220,7 @@ class _MinimalPlayerState:
 
 		# TODO: will need to pass in opportunity cost of playing a pudding instead of another card once ProbablisticScorer implements it
 		# (Normally the recursive solver doesn't need to worry about opportunity costs, but this is different because it's for future rounds)
-		pudding_scores = probablistic_scorer.score_puddings(self.num_puddings)
+		pudding_scores = probablistic_scorer.end_of_round_score_puddings(self.num_puddings)
 		for idx in range(self.num_players):
 			self.total_scores[idx] += pudding_scores[idx]
 
@@ -209,6 +230,9 @@ class _MinimalPlayerState:
 			for score, pudding in zip(self.total_scores, self.num_puddings)
 		])
 		my_neg_rank = -ranks[0]
+
+		if verbose:
+			print(f'{indent}Scores: {round_scores} + pudding: ({self.num_puddings} -> {container_to_str(pudding_scores, "{:.2g}")}) = rank {ranks}')
 
 		for idx in range(self.num_players):
 			self.total_scores[idx] += PUDDING_TIEBREAKER_SCALE * self.num_puddings[idx]
@@ -241,10 +265,15 @@ def _solve_recursive(
 		recursion_depth=0,
 		prune_my_bad_picks=True,
 		prune_others_bad_picks=True,
-		verbose=False,
+		verbose=Verbosity.silent,
 		) -> Tuple[Pick, Optional[Result]]:
 
 	assert recursion_depth < 10, "This recursion depth should not be possible - something went wrong!"
+
+	indent = '    ' * (1 + recursion_depth) if verbose else ''
+
+	extra_verbose = verbose >= Verbosity.extra_verbose
+	extra_verbose_recursive = verbose >= Verbosity.extra_verbose_recursive
 
 	need_result = (recursion_depth != 0)
 
@@ -258,7 +287,7 @@ def _solve_recursive(
 
 	if num_cards == 1:
 		pick = Pick(hand[0])
-		result = player_state.play_last_cards_and_score(probablistic_scorer=probablistic_scorer)
+		result = player_state.play_last_cards_and_score(probablistic_scorer=probablistic_scorer, verbose=extra_verbose_recursive, indent=indent)
 		return pick, result
 
 	my_pick_options = get_all_picks(hand, plate=plate, prune_likely_bad_picks=prune_my_bad_picks)
@@ -277,8 +306,6 @@ def _solve_recursive(
 	# TODO: Try reconstructing this every time instead of copying it into a list, see if it affects performance
 	other_players_options_product = list(itertools.product(*other_players_options))
 
-	indent = '    ' * (1 + recursion_depth) if verbose else ''
-
 	if verbose:
 		print(
 			f'{indent}My hand: {card_names(hand)}; '
@@ -296,7 +323,7 @@ def _solve_recursive(
 	for pick_option in my_pick_options:
 		pick_result = None
 
-		if verbose:
+		if extra_verbose:
 			if len(my_pick_options) == 1:
 				print(f'{indent}Only option is {pick_option}, calculating result:')
 			else:
@@ -310,7 +337,8 @@ def _solve_recursive(
 
 			is_last_recursion_level = len(next_player_state.hands[0]) == 1
 
-			if verbose and not is_last_recursion_level:
+			# if extra_verbose and not is_last_recursion_level:
+			if extra_verbose:
 				print(f'{indent}  If others play {card_names(other_player_option, short=True)}:')
 
 			_, next_pick_result = _solve_recursive(
@@ -321,12 +349,14 @@ def _solve_recursive(
 				recursion_depth=recursion_depth + 1,
 				prune_my_bad_picks=prune_my_bad_picks,
 				prune_others_bad_picks=prune_others_bad_picks,
-				verbose=verbose,
+				verbose = (verbose if extra_verbose_recursive else Verbosity.silent),
 			)
 
-			if verbose:
+			if extra_verbose:
 				if is_last_recursion_level:
-					print(f'{indent}  If others play {card_names(other_player_option, short=True)}: {next_pick_result}')
+					# TODO: maybe break down scoring?
+					# print(f'{indent}  If others play {card_names(other_player_option, short=True)}: {next_pick_result}')
+					print(f'{indent}    {next_pick_result}')
 				else:
 					print(f'{indent}    {next_pick_result}')
 
@@ -345,12 +375,15 @@ def _solve_recursive(
 
 		pick_result.average /= num_other_player_possibilities
 
-		if verbose:
+		if extra_verbose:
 			print(f'{indent}  Results if I play {pick_option}:')
 			print(f'{indent}    Best:  rank {-pick_result.best.neg_rank:.2f}, point diff {pick_result.best.score_differential:+.2g}')
 			print(f'{indent}    Avg:   rank {-pick_result.average.neg_rank:.2f}, point diff {pick_result.average.score_differential:+.2g}')
 			print(f'{indent}    Worst: rank {-pick_result.worst.neg_rank:.2f}, point diff {pick_result.worst.score_differential:+.2g}')
+		elif verbose:
+			print(f'{indent}{str(pick_option) + ":":20s} Rank {-pick_result.best.neg_rank:.2g} / {-pick_result.average.neg_rank:.2f} / {-pick_result.worst.neg_rank:.2g}; Point diff {pick_result.best.score_differential:+.2g} / {pick_result.average.score_differential:+.2g} / {pick_result.worst.score_differential:+.2g}')
 
+		# TODO: explicitly handle ties (right now it's just based on the order they get iterated in a set)
 		if (best_pick_result is None) or pick_result.is_better_than(best_pick_result[1], last_round=last_round, consolidation_type=consolidation_type):
 			best_pick_result = (pick_option, pick_result)
 
@@ -371,7 +404,7 @@ def _solve_recursive(
 	else:
 		raise KeyError(f'Invalid ConsolidationType: "{consolidation_type}"')
 
-	if verbose:
+	if extra_verbose:
 		print(f'{indent}Best result: {best_pick} (rank {-result.neg_rank:.2f}, point diff {result.score_differential:+.2g})')
 
 	return best_pick, result
@@ -382,6 +415,8 @@ def solve_recursive(
 		consolidation_type: ConsolidationType = 'average',
 		verbose=False,
 		) -> Pick:
+
+	verbosity = (VERBOSITY if verbose else Verbosity.silent)
 
 	hand = player_state.hand
 
@@ -468,7 +503,7 @@ def solve_recursive(
 		consolidation_type=consolidation_type,
 		prune_my_bad_picks=prune_my_bad_picks,
 		prune_others_bad_picks=prune_others_bad_picks,
-		verbose=verbose,
+		verbose=verbosity,
 	)
 	assert isinstance(pick, Pick)
 	return pick

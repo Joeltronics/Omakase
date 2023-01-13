@@ -104,6 +104,21 @@ def _check_plate(player: PlayerState) -> None:
 	assert count_maki(reconstructed_plate) == player.plate.maki, f'{reconstructed_plate=} {count_maki(reconstructed_plate)=} {player.plate.maki=}'
 
 
+def score_maki(nums_maki: Sequence[int]) -> List[int]:
+
+	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = _count_maki_plates(nums_maki)
+
+	def _score_maki(num_maki: int):
+		if num_maki == max_maki_count:
+			return points_most_maki
+		elif num_maki == second_maki_count:
+			return points_second_most_maki
+		else:
+			return 0
+
+	return [_score_maki(num_maki) for num_maki in nums_maki]
+
+
 def score_plates(plates_or_players: Union[Sequence[PlayerState], Sequence[Plate]], /) -> list[int]:
 
 	if not plates_or_players:
@@ -117,19 +132,9 @@ def score_plates(plates_or_players: Union[Sequence[PlayerState], Sequence[Plate]
 		assert isinstance(plates_or_players[0], Plate)
 		plates = plates_or_players
 
-	max_maki_count, points_most_maki, second_maki_count, points_second_most_maki = _count_maki_plates(
-		[plate.maki for plate in plates]
-	)
+	maki_scores = score_maki([plate.maki for plate in plates])
 
-	def _score_maki(num_maki: int):
-		if num_maki == max_maki_count:
-			return points_most_maki
-		elif num_maki == second_maki_count:
-			return points_second_most_maki
-		else:
-			return 0
-
-	return [plate.score + _score_maki(plate.maki) for plate in plates]
+	return [plate.score + maki_score for plate, maki_score in zip(plates, maki_scores)]
 
 
 def score_round_players(players: Sequence[PlayerState], print_it=True):

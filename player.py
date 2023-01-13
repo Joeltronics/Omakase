@@ -94,7 +94,7 @@ class PlayerState:
 		self.public_states = [PublicPlayerState(name=name)]
 
 		# Knowledge of deck
-		self.deck_dist = deepcopy(common_game_state.starting_deck_distribution)
+		self.deck_dist = deepcopy(common_game_state.starting_deck_distribution)  # TODO: rename this to unseen_deck_dist
 		self.num_unseen_dealt_cards = 0
 
 		# Private info
@@ -132,6 +132,10 @@ class PlayerState:
 	@property
 	def play_history(self) -> Sequence[Pick]:
 		return self.public_states[0].play_history
+
+	@property
+	def hands(self) -> list[list[Card]]:
+		return [self.hand] + [p.hand for p in self.other_player_states]
 
 	def assign_hand(self, hand):
 		# Sorting not actually necessary, but helps print formatting

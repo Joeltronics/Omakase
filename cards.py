@@ -65,7 +65,7 @@ class Card(IntEnum):
 	def is_nigiri(self) -> bool:
 		return self in [Card.EggNigiri, Card.SalmonNigiri, Card.SquidNigiri]
 
-	def num_maki(self) -> Optional[Literal[1, 2, 3]]:
+	def num_maki(self) -> Literal[0, 1, 2, 3]:
 		if self == Card.Maki1:
 			return 1
 		elif self == Card.Maki2:
@@ -73,7 +73,7 @@ class Card(IntEnum):
 		elif self == Card.Maki3:
 			return 3
 		else:
-			return None
+			return 0
 
 	def nigiri_base_points(self) -> Optional[Literal[1, 2, 3]]:
 		if self == Card.EggNigiri:
@@ -286,7 +286,7 @@ class Plate:
 
 		elif card.is_maki():
 			num_maki = card.num_maki()
-			assert num_maki is not None
+			assert num_maki
 			self.maki += num_maki
 
 		elif card == Card.Pudding:

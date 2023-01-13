@@ -72,6 +72,8 @@ def _random_plus_pick_card(
 		# 	return Card.Tempura, _RandomPickState.great  # 5 points
 
 	# Chopsticks: don't take if can't use
+	# e.g. most common case n_cards <= 2, plate.chopsticks == 0
+	# but also covers n_cards <= 3, plate.chopsticks == 1
 
 	if n_cards <= 2 + plate.chopsticks:
 		hand_maybes.discard(Card.Chopsticks)
