@@ -13,6 +13,22 @@ from cards import Card, Pick, Plate
 FLOAT_EPSILON = 1e-6
 
 
+def right_pad(val, width: int, char: str = ' ', throw_if_wider=False) -> str:
+	if len(char) != 1:
+		raise ValueError(f'Invalid char: "{char}"')
+	val_str = str(val)
+
+	num_char = width - len(val)
+	if num_char < 0:
+		if throw_if_wider:
+			raise ValueError(f'String too wide: {val_str}')
+		else:
+			return val_str
+
+	return val_str + char * num_char
+
+
+
 def random_bool() -> bool:
 	return bool(random.getrandbits(1))
 

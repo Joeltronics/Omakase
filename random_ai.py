@@ -12,12 +12,23 @@ from utils import *
 
 
 class RandomAI(PlayerInterface):
-	@staticmethod
-	def get_name() -> str:
-		return "RandomAI"
+	def __init__(self, weight_by_unique_cards=False):
+		"""
+		:param weight_by_unique_cards:
+			Determines whether the random pick will be weighted by total cards, or by unique cards.
+			e.g. if a hand has 3 of card A and 1 of card B:
+				weight_by_unique_cards=True will have a 50% chance of picking B
+				weight_by_unique_cards=False will have a 25% chance of picking B
+		"""
+		self.weight_by_unique_cards = weight_by_unique_cards
 
-	@staticmethod
-	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+	def get_name(self) -> str:
+		if self.weight_by_unique_cards:
+			return "RandomAI(WeightedUnique)"
+		else:
+			return "RandomAI(WeightedRepeated)"
+
+	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
 		hand = player_state.hand
 		assert len(hand) > 0
 
@@ -25,11 +36,21 @@ class RandomAI(PlayerInterface):
 		use_chopsticks = can_use_chopsticks and random_bool()
 
 		if use_chopsticks:
-			ret = random.sample(hand, 2)
-			assert len(ret) == 2
-			return Pick(ret[0], ret[1])
+			if self.weight_by_unique_cards:
+				card1 = random.choice(list(set(hand)))
+				hand_copy = list(hand)
+				hand_copy.remove(card1)
+				card2 = random.choice(list(set(hand_copy)))
+				return Pick(card1, card2)
+			else:
+				ret = random.sample(hand, 2)
+				assert len(ret) == 2
+				return Pick(ret[0], ret[1])
 		else:
-			return Pick(random.choice(hand))
+			if self.weight_by_unique_cards:
+				return Pick(random.choice(list(set(hand))))
+			else:
+				return Pick(random.choice(hand))
 
 
 @unique
@@ -219,6 +240,9 @@ A very simple AI that's mostly random, but makes a few obvious choices (when pos
 	- Always use chopsticks on 2nd last turn (if there's a point)
 """
 class RandomPlusAI(PlayerInterface):
+
+	# TODO: weight_by_unique_cards, like random
+
 	@staticmethod
 	def get_name() -> str:
 		return "RandomPlusAI"

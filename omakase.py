@@ -21,7 +21,7 @@ from deck import Deck, get_deck_distribution
 from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game, PlayerResult
 from player import get_player_name
-from utils import add_numbers_to_duplicate_names, random_order_and_inverse
+from utils import add_numbers_to_duplicate_names, right_pad
 
 
 RESET_ALL = colorama.Style.RESET_ALL
@@ -151,10 +151,9 @@ def _setup_players(args):
 	if args.recursive_test:
 		print('--recursive-test given, using recursive AI')
 		if args.omniscient:
-			ai_class_constructors.append(RecursiveSolverAI)
+			ai_class_constructors.append(lambda: RecursiveSolverAI(consolidation_type='average'))
 		else:
-			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=BasicPresentValueAI()))
-			# ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=TunnelVisionAI()))
+			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=BasicPresentValueAI(), consolidation_type='average'))
 
 	ai_class_constructors += [
 		BasicPresentValueAI,
@@ -162,8 +161,18 @@ def _setup_players(args):
 		RandomPlusPlusAI,
 		RandomPlusAI,
 		HandOnlyAI,
-		RandomAI,
+		lambda: RandomAI(weight_by_unique_cards=False),
+		lambda: RandomAI(weight_by_unique_cards=True),
 	]
+
+	if args.recursive_test:
+		# Put these at the end, so e.g. if we're only running 1 game we don't end up with almost entirely recursive AI
+		if args.omniscient:
+			ai_class_constructors.append(lambda: RecursiveSolverAI(consolidation_type='worst'))
+			ai_class_constructors.append(lambda: RecursiveSolverAI(consolidation_type='best'))
+		else:
+			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=BasicPresentValueAI(), consolidation_type='worst'))
+			ai_class_constructors.append(lambda: LaterRecursiveAI(non_recursive_ai=BasicPresentValueAI(), consolidation_type='best'))
 
 	players = []
 	for constructor in ai_class_constructors:
@@ -269,6 +278,8 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 	player_game_stats = sorted(player_game_stats, key = lambda pgs: pgs.elo, reverse=True)
 	num_players = len(player_game_stats)
 
+	name_len = max(len(player.name) for player in player_game_stats)
+
 	print()
 	print(f'Results from {num_games} games')
 
@@ -276,9 +287,8 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 	print('Summary:')
 	print()
 
-	# TODO: dynamic table column widths, in case of long player name or player with >= 10,000 wins
-	print(f'{"Player":<20} | {"Wins":^10} | Avg rank | Avg score | Avg margin | Elo')
-	print(f'{"-"*20} | {"-"*10} | {"-"*8} | {"-"*9} | {"-"*10} | {"-"*4}')
+	print(f'{right_pad("Player", name_len)} | {"Wins":^10} | Avg rank | Avg score | Avg margin | Elo')
+	print(f'{"-"*name_len} | {"-"*10} | {"-"*8} | {"-"*9} | {"-"*10} | {"-"*4}')
 	for player in player_game_stats:
 		player_num_games = len(player.ranks)
 		num_wins = sum(rank == 1 for rank in player.ranks)
@@ -286,7 +296,7 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 		avg_rank = sum(player.normalized_ranks if player.normalized_ranks else player.ranks) / player_num_games
 		avg_score = player.total_num_points / player_num_games
 		avg_margin = player.margin_from_winner / player_num_games
-		print(f'{player.name:<20} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f} | {player.elo:>4.0f}')
+		print(f'{right_pad(player.name, name_len)} |{num_wins:>5} ={pct_wins:3.0f}% | {avg_rank:>8.2f} | {avg_score:>9.2f} | {avg_margin:>10.2f} | {player.elo:>4.0f}')
 
 	print()
 	print('Matchups:')
@@ -297,8 +307,8 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 		name = ''.join([c for c in name if c.isalnum() and not c.islower()])
 		return f'{name:^5}'
 
-	print(f'{"Player":<20} | ' + ' | '.join(_short_player_name(p.name) for p in player_game_stats) + ' |')
-	separator = f'{"-"*20} | ' + ' | '.join(['-'*5 for _ in range(num_players)]) + ' |'
+	print(f'{right_pad("Player", name_len)} | ' + ' | '.join(_short_player_name(p.name) for p in player_game_stats) + ' |')
+	separator = f'{"-"*name_len} | ' + ' | '.join(['-'*5 for _ in range(num_players)]) + ' |'
 	print(separator)
 	for player in player_game_stats:
 
@@ -343,12 +353,12 @@ def _print_results(player_game_stats: Sequence[PlayerGameStats], num_games: int,
 		def _fmt_vals(vals, pct=False) -> list[str]:
 			return [color + _fmt_val(val, pct=pct) + RESET_ALL for color, val in zip(colors, vals)]
 
-		print(f'{player.name:<20} | ' + ' | '.join(_fmt_vals(win_rates, pct=True)) + ' |')
+		print(f'{right_pad(player.name, name_len)} | ' + ' | '.join(_fmt_vals(win_rates, pct=True)) + ' |')
 		if print_full_matchups:
-			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(wins)) + ' |')
-			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(ties)) + ' |')
-			print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(losses)) + ' |')
-		print(f'{" " * 20} | ' + ' | '.join(_fmt_vals(ranks)) + ' |')
+			print(f'{" " * name_len} | ' + ' | '.join(_fmt_vals(wins)) + ' |')
+			print(f'{" " * name_len} | ' + ' | '.join(_fmt_vals(ties)) + ' |')
+			print(f'{" " * name_len} | ' + ' | '.join(_fmt_vals(losses)) + ' |')
+		print(f'{" " * name_len} | ' + ' | '.join(_fmt_vals(ranks)) + ' |')
 		print(separator)
 
 

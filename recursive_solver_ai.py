@@ -510,26 +510,43 @@ def solve_recursive(
 
 
 class RecursiveSolverAI(PlayerInterface):
-	@staticmethod
-	def get_name() -> str:
-		return "RecursiveSolverAI"
+	def __init__(self, consolidation_type: ConsolidationType = 'average'):
+		self.consolidation_type = consolidation_type
 
-	@staticmethod
-	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
-		return solve_recursive(player_state=player_state, verbose=verbose)
+	def get_name(self) -> str:
+		if self.consolidation_type == 'average':
+			return "RecursiveSolverAI(Average)"
+		elif self.consolidation_type == 'worst':
+			return "RecursiveSolverAI(Pessimistic)"
+		elif self.consolidation_type == 'best':
+			return "RecursiveSolverAI(Optimistic)"
+		else:
+			assert False, f"Invalid ConsolidationType: {self.consolidation_type}"
+
+	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
+		return solve_recursive(player_state=player_state, consolidation_type=self.consolidation_type, verbose=verbose)
 
 
 class LaterRecursiveAI(PlayerInterface):
-	@staticmethod
-	def get_name() -> str:
-		return "LaterRecursiveAI"
-
-	def __init__(self, non_recursive_ai: PlayerInterface, max_recursive_hand_size: int = 3):
+	def __init__(self, non_recursive_ai: PlayerInterface, max_recursive_hand_size: int = 3, consolidation_type: ConsolidationType = 'average'):
 		self.non_recursive_ai = non_recursive_ai
+		# TODO: optionally a variable recursive hand size per number of players (i.e. might want higher when fewer players)
 		self.max_recursive_hand_size = max_recursive_hand_size
+		# TODO: optionally a different consolidation type for 2-player games
+		self.consolidation_type = consolidation_type
+
+	def get_name(self) -> str:
+		if self.consolidation_type == 'average':
+			return "LaterRecursiveAI(Average)"
+		elif self.consolidation_type == 'worst':
+			return "LaterRecursiveAI(Pessimistic)"
+		elif self.consolidation_type == 'best':
+			return "LaterRecursiveAI(Optimistic)"
+		else:
+			assert False, f"Invalid ConsolidationType: {self.consolidation_type}"
 
 	def play_turn(self, player_state: PlayerState, verbose=False) -> Pick:
 		if len(player_state.hand) > self.max_recursive_hand_size or player_state.any_unknown_cards:
 			return self.non_recursive_ai.play_turn(player_state=player_state, verbose=verbose)
 		else:
-			return solve_recursive(player_state=player_state, verbose=verbose)
+			return solve_recursive(player_state=player_state, consolidation_type=self.consolidation_type, verbose=verbose)
