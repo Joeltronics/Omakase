@@ -53,16 +53,17 @@ def elo(
 	if delta:
 		return (da, db)
 
-	sa = max(sa + da, MIN_ELO)
-	sb = max(sb + db, MIN_ELO)
+	ra = max(ra + da, MIN_ELO)
+	rb = max(rb + db, MIN_ELO)
 
-	return sa, sb
+	return ra, rb
 
 
 def multiplayer_elo(
 		ranks: Sequence[int],
 		ratings: Sequence[Sequence],
-		num_prev_matchups: Sequence[int],
+		k: Optional[float] = None,
+		num_prev_matchups: Optional[Sequence[int]] = None,
 		) -> List[float]:
 	""""""
 
@@ -77,8 +78,11 @@ def multiplayer_elo(
 
 	new_ratings = []
 
-	min_num_prev_matchups = min(num_prev_matchups)
-	k = k_factor(num_games=((num_players - 1) * (1 + min_num_prev_matchups)))
+	if k is None:
+		if num_prev_matchups is None:
+			raise ValueError('Must provide num_prev_matchups if not providing k')
+		min_num_prev_matchups = min(num_prev_matchups)
+		k = k_factor(num_games=((num_players - 1) * (1 + min_num_prev_matchups)))
 
 	for player_idx, (player_rank, player_rating) in enumerate(zip(ranks, ratings)):
 

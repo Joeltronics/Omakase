@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+from collections import OrderedDict
 from collections.abc import Sequence
 import colorama
 from copy import copy
@@ -9,6 +10,7 @@ import itertools
 from multiprocessing import Pool
 import random
 from typing import List, Optional
+import warnings
 
 from tqdm import tqdm, trange
 
@@ -18,13 +20,16 @@ from present_value_based_ai import HandOnlyAI, TunnelVisionAI, BasicPresentValue
 
 from cards import Card
 from deck import Deck, get_deck_distribution
-from elo import multiplayer_elo, DEFAULT_ELO
+from elo import elo, multiplayer_elo, DEFAULT_ELO
 from game import Game, PlayerResult
 from player import get_player_name
 from utils import add_numbers_to_duplicate_names, ceil_divide, right_pad
 
 
 RESET_ALL = colorama.Style.RESET_ALL
+
+NEW_ELO_CALCULATION = True
+MULTIPROCESSING_MAX_CHUNK_SIZE = 32
 
 
 def _bool_arg(val) -> bool:
@@ -195,6 +200,110 @@ def _setup_players(args):
 	return players, player_names
 
 
+def _calculate_elo_new(
+		player_game_stats_dict: dict,
+		starting_k=128,
+		max_iterations=10,
+		elo_epsilon=0.5,
+		use_initial_estimate=True,
+		) -> None:
+
+	# Order matters for the sake of comparing elos_before & elos_after
+	# (Even though dict order shouldn't actually change here, technically the language doesn't guarantee it)
+	stats = OrderedDict(player_game_stats_dict)
+
+	num_players = len(stats)
+
+	num_matchups = num_players * (num_players - 1)
+
+	total = num_matchups * (max_iterations + int(bool(use_initial_estimate)))
+	with tqdm(total=total, desc='Calculating Elo') as pbar:
+
+		# First, calculate initial Elo estimates
+		# (Not needed, but helps it converge faster)
+
+		if use_initial_estimate:
+			# This k factor seems to give a decent enough initial estimate; TODO: figure out the actual math
+			k = 800 / num_players
+			for player_stats in stats.values():
+				assert player_stats.elo == DEFAULT_ELO
+				for matchup in player_stats.matchups.values():
+					scores = (
+						(matchup.num_wins + 0.5 * matchup.num_ties) / matchup.num_games,
+						(matchup.num_losses + 0.5 * matchup.num_ties) / matchup.num_games,
+					)
+
+					# Don't use prev_ratings, since we don't have good starting estimates yet
+					deltas = elo(scores, k=k, delta=True)
+					player_stats.elo += deltas[0]
+
+					pbar.update(1)
+
+				if player_stats.elo_history is not None:
+					player_stats.elo_history.append(player_stats.elo)
+
+		# Then, iterate all matchup pairs, a few times at different k values
+
+		k = starting_k
+		max_delta_prev = None
+		for _ in range(max_iterations):
+
+			elos_before = [player.elo for player in stats.values()]
+
+			for player_stats in stats.values():
+				for matchup_player_name, matchup in player_stats.matchups.items():
+					# TODO: technically this calculates each matchup twice
+					matchup_player = stats[matchup_player_name]
+					elo_prev = (player_stats.elo, matchup_player.elo)
+					scores = (
+						(matchup.num_wins + 0.5 * matchup.num_ties) / matchup.num_games,
+						(matchup.num_losses + 0.5 * matchup.num_ties) / matchup.num_games,
+					)
+					elo_new = elo(scores, prev_ratings=elo_prev, k=k)
+					player_stats.elo = elo_new[0]
+					matchup_player.elo = elo_new[1]
+					pbar.update(1)
+
+			for player_stats in stats.values():
+				if player_stats.elo_history is not None:
+					player_stats.elo_history.append(player_stats.elo)
+			
+			elos_after = [player.elo for player in stats.values()]
+			max_delta_new = max(abs(elo_before - elo_after) for elo_before, elo_after in zip(elos_before, elos_after))
+			assert max_delta_new >= 0
+
+			if max_delta_new < elo_epsilon:
+				return
+
+			if (max_delta_prev is not None) and (max_delta_new >= max_delta_prev):
+				raise AssertionError(f'Elo failed to converge (delta {max_delta_prev} -> {max_delta_new})')
+
+			k = min(k, 2*max_delta_new)
+			max_delta_prev = max_delta_new
+
+	warnings.warn(f'Elo failed to converge in {max_iterations} iterations')
+
+
+def _calculate_elo_old(player_game_stats_dict: dict, game_results: Sequence[Sequence[PlayerResult]]) -> None:
+	for game_result in tqdm(game_results, desc='Calculating Elo'):
+
+		num_players_this_game = len(game_result)
+		player_names_this_game = [r.name for r in game_result]
+
+		ranks=[r.rank for r in game_result]
+		ratings=[player_game_stats_dict[name].elo for name in player_names_this_game]
+		num_prev_matchups=[player_game_stats_dict[name].num_elo_matchups_played for name in player_names_this_game]
+
+		new_elos = multiplayer_elo(ranks=ranks, ratings=ratings, num_prev_matchups=num_prev_matchups)
+
+		for player_game_result, new_elo in zip(game_result, new_elos):
+			player_stats = player_game_stats_dict[player_game_result.name]
+			player_stats.elo = new_elo
+			player_stats.num_elo_matchups_played += num_players_this_game - 1
+			if player_stats.elo_history is not None:
+				player_stats.elo_history.append(new_elo)
+
+
 def _process_results(
 		game_results: Sequence[Sequence[PlayerResult]],
 		player_names: Sequence[str],
@@ -207,27 +316,17 @@ def _process_results(
 
 	# TODO: If there are multiple of the same AI, consolidate their stats
 
-	# TODO: should be able to calculate Elo all at once based on overall matchup stats instead of game-by-game
-
 	player_game_stats_dict = {
 		name: PlayerGameStats(name=name, normalized_ranks=([] if different_player_counts else None), elo_history=([] if include_elo_history else None))
 		for name in player_names
 	}
 
 	for game_result in tqdm(game_results, desc='Processing results'):
-
 		num_players_this_game = len(game_result)
-		player_names_this_game = [r.name for r in game_result]
-
 		winning_score = max(r.score for r in game_result)
 
-		new_elos = multiplayer_elo(
-			ranks=[r.rank for r in game_result],
-			ratings=[player_game_stats_dict[name].elo for name in player_names_this_game],
-			num_prev_matchups=[player_game_stats_dict[name].num_elo_matchups_played for name in player_names_this_game],
-		)
+		for player_game_result in game_result:
 
-		for player_game_result, new_elo in zip(game_result, new_elos):
 			player_stats = player_game_stats_dict[player_game_result.name]
 			margin = player_game_result.score - winning_score
 			player_stats.total_num_points += player_game_result.score
@@ -245,10 +344,9 @@ def _process_results(
 				assert 0 <= normalized_rank <= 1
 				player_stats.normalized_ranks.append(normalized_rank)
 
-			player_stats.elo = new_elo
-			player_stats.num_elo_matchups_played += num_players_this_game - 1
-			if player_stats.elo_history is not None:
-				player_stats.elo_history.append(new_elo)
+			my_rank = player_game_result.rank
+
+			assert 1 <= my_rank <= num_players_this_game
 
 			for other_player_result in game_result:
 				if other_player_result == player_game_result:
@@ -267,6 +365,11 @@ def _process_results(
 					matchup.num_ties += 1
 
 				matchup.sum_rank += normalized_rank if (normalized_rank is not None) else my_rank
+
+	if NEW_ELO_CALCULATION:
+		_calculate_elo_new(player_game_stats_dict)
+	else:
+		_calculate_elo_old(player_game_stats_dict, game_results)
 
 	return list(player_game_stats_dict.values())
 
@@ -373,6 +476,8 @@ def _plot_elo(plt, player_game_stats: Sequence[PlayerGameStats]) -> None:
 	for player in player_game_stats:
 		assert player.elo_history is not None
 		ax.plot(player.elo_history, label=player.name)
+		# line, = ax.plot(player.elo_history, label=player.name)
+		# ax.axhline(player.base_elo, color=line.get_color())
 
 	ax.grid()
 	ax.legend()
