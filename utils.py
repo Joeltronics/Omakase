@@ -28,6 +28,9 @@ def right_pad(val, width: int, char: str = ' ', throw_if_wider=False) -> str:
 	return val_str + char * num_char
 
 
+def ceil_divide(numer: int, denom: int) -> int:
+	return (numer + denom - 1) // denom
+
 
 def random_bool() -> bool:
 	return bool(random.getrandbits(1))
@@ -180,6 +183,9 @@ def container_to_str(container, /, item_format='{}', *, type=None) -> str:
 	if isinstance(container, (set, frozenset)):
 		start_chr = '{'
 		end_chr = '}'
+	elif isinstance(container, tuple):
+		start_chr = '('
+		end_chr = ')'
 	else:
 		start_chr = '['
 		end_chr = ']'

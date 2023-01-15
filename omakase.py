@@ -21,7 +21,7 @@ from deck import Deck, get_deck_distribution
 from elo import multiplayer_elo, DEFAULT_ELO
 from game import Game, PlayerResult
 from player import get_player_name
-from utils import add_numbers_to_duplicate_names, right_pad
+from utils import add_numbers_to_duplicate_names, ceil_divide, right_pad
 
 
 RESET_ALL = colorama.Style.RESET_ALL
@@ -486,15 +486,23 @@ def main():
 		else:
 			print(f'Using provided random seed: {args.seed}')
 
+	# TODO: return partial results if exiting early (need to use multiprocessing shared array for returns)
+
 	if use_multiprocessing:
 		with Pool() as p:
-			game_results = list(
-				tqdm(
-					p.imap(_play_game_from_kwargs, itertools.repeat(play_game_kwargs, args.num_games)),
-					total=args.num_games,
-					desc=f'Playing {args.num_games} games (multithreaded)',
-				)
-			)
+			processes = p._processes  # TODO: is there a better way to get this without using private members?
+			chunksize = ceil_divide(args.num_games, processes)
+			assert chunksize >= 1
+			chunksize = min(chunksize, MULTIPROCESSING_MAX_CHUNK_SIZE)
+			game_results = list(tqdm(
+				p.imap(
+					_play_game_from_kwargs,
+					itertools.repeat(play_game_kwargs, args.num_games),
+					chunksize=chunksize,
+				),
+				total=args.num_games,
+				desc=f'Playing {args.num_games} games ({processes} processes, chunksize {chunksize})',
+			))
 	else:
 		game_results = [
 			play_game(random_seed=(args.seed + game_idx), **play_game_kwargs)
