@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 from collections.abc import Collection, Sequence
+from copy import copy, deepcopy
 from dataclasses import dataclass
 from numbers import Real
 from typing import Optional, Tuple, Union
+import warnings
 
 from player import PlayerInterface, PlayerState
 from probablistic_scoring import ProbablisticScorer, num_cards_odds_at_least
@@ -746,6 +748,9 @@ def _pair_avg_points(
 	card1, card2 = cards
 	num_chopsticks -= 1
 
+	if player_state is not None:
+		plate = player_state.plate
+
 	"""
 	FIXME: a lot of the assumptions in _card_avg_points() don't actually work with chopsticks!
 
@@ -791,16 +796,19 @@ def _pair_avg_points(
 	if card1 == Card.Chopsticks:
 		num_chopsticks += 1
 
-	# TODO BPV: update player_state (then uncomment ProbablisticScorer code below)
 	if player_state is not None:
 
-		# raise NotImplementedError('TODO: get chopsticks working with this solver!')
-		player_state = None
-		probablistic_scorer = None
+		player_state = deepcopy(player_state)
 
-		# if probablistic_scorer is not None:
-		# 	probablistic_scorer = ProbablisticScorer(player_state)
+		player_state.hand.remove(card1)
+		player_state.hand.append(Card.Chopsticks)
+		assert plate_after is not None
+		player_state.public_state.plate = plate_after
 
+		if probablistic_scorer is not None:
+			probablistic_scorer = ProbablisticScorer(player_state)
+		else:
+			warnings.warn('player_state is not None, but probablistic_scorer is')
 
 	card2_points = _card_avg_points(
 		card2,
