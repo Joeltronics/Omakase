@@ -157,13 +157,10 @@ class _MinimalPlayerState:
 		if player_state.any_unknown_cards:
 			raise ValueError('Cannot use recursive solving when there are unknown cards!')
 
-		hands = deque([deque(s.hand) for s in player_state.other_player_states])
-		assert not any(Card.Unknown in h for h in hands)
-		hands.appendleft(player_state.hand)
-
-		total_scores = [player_state.public_state.total_score] + [s.total_score for s in player_state.other_player_states]
-		num_puddings = [player_state.public_state.num_pudding] + [s.num_pudding for s in player_state.other_player_states]
-		plates = [copy(player_state.public_state.plate)] + [copy(s.plate) for s in player_state.other_player_states]
+		hands = deque(deque(hand) for hand in player_state.hands)
+		total_scores = [s.total_score for s in player_state.public_states]
+		num_puddings = [s.num_pudding for s in player_state.public_states]
+		plates = [copy(s.plate) for s in player_state.public_states]
 
 		return cls(
 			total_scores=total_scores,

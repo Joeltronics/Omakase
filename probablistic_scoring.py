@@ -268,7 +268,7 @@ class ProbablisticScorer:
 		self.num_players = common.num_players
 		self.deck_total_num_puddings = common.starting_deck_distribution[Card.Pudding]
 
-		assert all(len(other.hand) == len(player_state.hand) for other in player_state.other_player_states)
+		assert all(len(hand) == len(player_state.hand) for hand in player_state.other_player_hands)
 		end_of_round = not len(player_state.hand)
 
 		self.num_unseen_pudding = player_state.deck_dist[Card.Pudding]
@@ -285,8 +285,8 @@ class ProbablisticScorer:
 			self.average_unknown_pudding_in_hands = 0
 
 		else:
-			other_hands = [other.hand for other in player_state.other_player_states]
-			all_hands = [player_state.hand] + other_hands
+			other_hands = [hand for hand in player_state.other_player_hands]
+			all_hands = player_state.hands
 
 			self.num_unknown_cards_this_round = sum(count_card(hand, Card.Unknown) for hand in other_hands)
 

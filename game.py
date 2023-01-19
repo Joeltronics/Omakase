@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Sequence
 from copy import copy, deepcopy
 from dataclasses import dataclass
@@ -8,7 +8,7 @@ from typing import Callable, Iterable, List, Optional, Sequence, Union
 
 from cards import Card, Pick, card_names
 from deck import Deck, get_deck_distribution
-from player import CommonGameState, PlayerInterface, PlayerState, init_other_player_states_after_dealing_hands, pass_hands
+from player import CommonGameState, PlayerInterface, PlayerState, init_round
 from present_value_based_ai import TunnelVisionAI
 import scoring
 from utils import add_numbers_to_duplicate_names
@@ -119,14 +119,13 @@ class Game:
 
 			hands = self._deck.deal_hands(self._num_players, self._num_cards_per_player)
 
-			self._print("Dealing hands:")
-			for player, hand in zip(self._player_states, hands):
-				player.assign_hand(hand)
-				self._print("\t%s: %s" % (player.name, card_names(player.hand)))
-			self._print()
-
-			init_other_player_states_after_dealing_hands(
-				self._player_states, round_idx=round_idx, round_pass_forward=round_pass_forward, verbose=self.verbose)
+			init_round(
+				player_states=self._player_states,
+				hands=hands,
+				round_idx=round_idx,
+				round_pass_forward=round_pass_forward,
+				verbose=self.verbose,
+			)
 
 			for turn_idx in range(self._num_cards_per_player):
 				if self._num_rounds > 1:
@@ -161,6 +160,8 @@ class Game:
 
 	def _play_turn(self, pass_forward: bool):
 
+		picks = []
+
 		for n, (state, player) in enumerate(zip(self._player_states, self._players)):
 
 			verbose = self.verbose and (n == 0)
@@ -188,19 +189,15 @@ class Game:
 			if not isinstance(pick, Pick):
 				raise ValueError(f'AI played invalid: {pick!r}')
 
-			state.play_turn(pick)
+			picks.append(pick)
 
 			self._print()
 
-		debug_update_player_state_verbose = False
-
-		for idx, player in enumerate(self._player_states):
-			verbose = debug_update_player_state_verbose and (idx == 0)
-			player.update_other_player_state_before_pass(self._public_states_dict, verbose=verbose)
+		for state, pick in zip(self._player_states, picks):
+			state.play_turn(pick)
 
 		self._print('Passing cards %s' % ('forward' if pass_forward else 'backward'))
-		pass_hands(self._player_states, forward=pass_forward)
-
-		for idx, player in enumerate(self._player_states):
-			verbose = debug_update_player_state_verbose and (idx == 0)
-			player.update_other_player_state_after_pass(verbose=verbose)
+		hands = deque(player.hand for player in self._player_states)
+		hands.rotate(1 if pass_forward else -1)
+		for hand, player in zip(hands, self._player_states):
+			player.pass_hands(hand)
