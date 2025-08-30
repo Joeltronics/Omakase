@@ -16,7 +16,7 @@ from tqdm import tqdm, trange
 
 from random_ai import RandomAI, RandomPlusAI, RandomPlusPlusAI
 from recursive_solver_ai import RecursiveSolverAI, LaterRecursiveAI
-from present_value_based_ai import HandOnlyAI, TunnelVisionAI, BasicPresentValueAI
+from present_value_based_ai import HandOnlyAI, TunnelVisionAI, BasicPresentValueAI, SushiGolfBot, BlockBot, BlockBotLight
 
 from cards import Card
 from deck import Deck, get_deck_distribution
@@ -166,6 +166,9 @@ def _setup_players(args):
 		RandomPlusPlusAI,
 		RandomPlusAI,
 		HandOnlyAI,
+		SushiGolfBot,
+		BlockBot,
+		BlockBotLight,
 		lambda: RandomAI(weight_by_unique_cards=False),
 		lambda: RandomAI(weight_by_unique_cards=True),
 	]

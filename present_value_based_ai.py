@@ -933,6 +933,69 @@ class BasicPresentValueAI(PlayerInterface):
 		)
 
 
+"""
+Bot that tries to get the lowest score possible, instead of the highest
+"""
+class SushiGolfBot(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "SushiGolfBot"
+
+	@staticmethod
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+
+		hand = player_state.hand
+
+		# Chopsticks are the only pick we can always guarantee will be 0 points, so always take if we can
+		if Card.Chopsticks in hand:
+			return Pick(Card.Chopsticks)
+
+		return present_value_play_turn(
+			player_state=player_state,
+			hand=player_state.hand,
+			always_take_chopsticks=True,
+			lowest_score=True,
+			verbose=verbose,
+		)
+
+
+"""
+Bot that prioritizes blocking other players above all else
+(I've known people who play like this...)
+"""
+class BlockBot(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "BlockBot"
+
+	@staticmethod
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+		return present_value_play_turn(
+			player_state=player_state,
+			hand=player_state.hand,
+			blocking_point_scale=100.0,
+			verbose=verbose,
+		)
+
+
+"""
+Bot that is skewed toward blocking other players
+"""
+class BlockBotLight(PlayerInterface):
+	@staticmethod
+	def get_name() -> str:
+		return "BlockBotLight"
+
+	@staticmethod
+	def play_turn(player_state: PlayerState, verbose=False) -> Pick:
+		return present_value_play_turn(
+			player_state=player_state,
+			hand=player_state.hand,
+			blocking_point_scale=5.0,
+			verbose=verbose,
+		)
+
+
 def present_value_play_turn(*,
 		player_state: Optional[PlayerState] = None,
 		hand: Optional[Sequence[Card]] = None,  # Required if player_state is None
@@ -942,6 +1005,7 @@ def present_value_play_turn(*,
 		opportunity_cost_scale: float = 1.0,
 		chopstick_opportunity_cost: bool = True,
 		always_take_chopsticks: bool = False,
+		lowest_score=False,
 		verbose=False,
 		has_chopsticks: Optional[bool] = None,  # Required if player_state & plate are None
 		has_wasabi: Optional[bool] = None,  # Required if player_state & plate are None
@@ -981,6 +1045,7 @@ def present_value_play_turn(*,
 
 	# TODO: could make this slightly more efficient by eliminating some obvious picks (don't take lower nigiri or Maki)
 	# Should just use utils.get_all_picks(), it has this logic built in
+	# Make sure not to do this if lowest_score
 	cards_points = {
 		Pick(card): _card_avg_points(
 			card,
@@ -994,7 +1059,8 @@ def present_value_play_turn(*,
 		) for card in set(hand)
 	}
 
-	if can_use_chopsticks:
+	# If lowest_score, never use chopsticks
+	if can_use_chopsticks and not lowest_score:
 		chopstick_opportunity_cost = _using_chopsticks_opportunity_cost(
 			num_chopsticks=num_chopsticks,
 			num_cards_in_hand=n_cards,
@@ -1038,20 +1104,27 @@ def present_value_play_turn(*,
 		}
 		assert cards_points
 
-	# Take highest point value option (if tied, take random from tied)
+	# Take highest point value option (or lowest, if lowest_score). If tied, pick randomly from tied
 
-	max_points = max([v.total for v in cards_points.values()])
-	max_point_picks = [
-		card
-		for card, points
-		in cards_points.items()
-		if points.total >= (max_points - FLOAT_EPSILON)
-	]
+	if lowest_score:
+		min_points = min([v.total for v in cards_points.values()])
+		pick_options = [
+			card
+			for card, points in cards_points.items()
+			if points.total <= (min_points + FLOAT_EPSILON)
+		]
+	else:
+		max_points = max([v.total for v in cards_points.values()])
+		pick_options = [
+			card
+			for card, points in cards_points.items()
+			if points.total >= (max_points - FLOAT_EPSILON)
+		]
 
 	if verbose:
-		if len(max_point_picks) > 1:
-			print(f'Picking randomly from top: [{card_names(max_point_picks)}]')
+		if len(pick_options) > 1:
+			print(f'Picking randomly from top: [{card_names(pick_options)}]')
 		else:
-			print(f'Picking highest: {max_point_picks[0]}')
+			print(f'Picking highest: {pick_options[0]}')
 
-	return random.choice(max_point_picks)
+	return random.choice(pick_options)
